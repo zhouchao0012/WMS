@@ -311,10 +311,14 @@ tick(); setInterval(tick, 1000);
 // Chart helper
 const charts = {};
 function ch(id) {
-  if (!charts[id]) charts[id] = echarts.init(document.getElementById(id));
+  if (!charts[id]) {
+    var el = document.getElementById(id);
+    if (!el) return {setOption:function(){},resize:function(){}};
+    try { charts[id] = echarts.init(el); } catch(e) { return {setOption:function(){},resize:function(){}}; }
+  }
   return charts[id];
 }
-window.addEventListener('resize', () => Object.values(charts).forEach(c => c.resize()));
+window.addEventListener('resize', () => Object.values(charts).forEach(c => { try { c.resize(); } catch(e) {} }));
 
 const STATUS_COLORS = {
   '无效': '#cbd5e1', '禁用': '#94a3b8', '入库锁定': '#93c5fd',

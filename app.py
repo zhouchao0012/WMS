@@ -261,13 +261,19 @@ def _build_mock_data(zone):
                 inbound = rand_older(31, 60)
             else:
                 inbound = rand_older(61, 365)
+            barcode_val = p[3]
+            if random.random() < 0.3:
+                extras = random.randint(1, 2)
+                barcode_val = barcode_val + ',' + ','.join([f"TM{random.randint(100000,999999)}" for _ in range(extras)])
+            roll_count = len([x for x in barcode_val.split(',') if x.strip()]) * 2
             loc['product'] = {
                 'palletNumber': f"TP{random.randint(100000, 999999)}",
-                'barcode': p[3],
+                'barcode': barcode_val,
                 'materielCode': p[0],
                 'spec': p[1],
                 'model': p[2],
-                'supplier': p[4],
+                'productTime': p[4],
+                'rollCount': roll_count,
                 'inboundTime': inbound,
             }
 
@@ -358,7 +364,7 @@ def api_locations():
             r.MATERIEL_CODE,
             r.GG                             AS spec,
             r.XH                             AS model,
-            r.SJ                             AS supplier,
+            r.SJ                             AS product_time,
             r.RKSJ                           AS inbound_time
         FROM WMS_HJ_KW k
         LEFT JOIN WMS_RKZY r ON k.CURRENT_RKZY_ID = r.RKZY_ID
@@ -397,13 +403,16 @@ def _build_loc_from_row(r, zone):
     }
     if r.get('MATERIEL_CODE') or r.get('PALLET_NUMBER'):
         inbound_time = r.get('inbound_time')
+        barcode_val = r.get('barcode') or ''
+        roll_count = len([x for x in barcode_val.split(',') if x.strip()]) * 2
         loc['product'] = {
             'palletNumber': r.get('PALLET_NUMBER') or '',
-            'barcode': r.get('barcode') or '',
+            'barcode': barcode_val,
             'materielCode': r.get('MATERIEL_CODE') or '',
             'spec': r.get('spec') or '',
             'model': r.get('model') or '',
-            'supplier': r.get('supplier') or '',
+            'productTime': r.get('product_time') or '',
+            'rollCount': roll_count,
             'inboundTime': inbound_time.strftime('%Y-%m-%d %H:%M:%S')
                 if inbound_time and hasattr(inbound_time, 'strftime')
                 else str(inbound_time or ''),
@@ -432,7 +441,7 @@ def api_locations_all():
             r.MATERIEL_CODE,
             r.GG                             AS spec,
             r.XH                             AS model,
-            r.SJ                             AS supplier,
+            r.SJ                             AS product_time,
             r.RKSJ                           AS inbound_time
         FROM WMS_HJ_KW k
         LEFT JOIN WMS_RKZY r ON k.CURRENT_RKZY_ID = r.RKZY_ID
@@ -792,7 +801,7 @@ def api_location_detail(code):
             r.GG AS spec,
             r.XH AS model,
             r.TM AS barcode,
-            r.SJ AS supplier,
+            r.SJ AS product_time,
             r.REAL_HEIGHT,
             r.CJSJ AS create_time,
             r.RKSJ AS inbound_time,
@@ -814,6 +823,8 @@ def api_location_detail(code):
     r = dict(zip(columns, row))
     loc_code = str(r.get('HJ_KW_CODE', '') or '').strip()
     inbound_time = r.get('inbound_time')
+    barcode_val = r.get('barcode') or ''
+    roll_count = len([x for x in barcode_val.split(',') if x.strip()]) * 2
 
     return jsonify({
         'locationCode': loc_code,
@@ -830,8 +841,9 @@ def api_location_detail(code):
             'materielCode': r.get('MATERIEL_CODE') or '',
             'spec': r.get('spec') or '',
             'model': r.get('model') or '',
-            'barcode': r.get('barcode') or '',
-            'supplier': r.get('supplier') or '',
+            'barcode': barcode_val,
+            'productTime': r.get('product_time') or '',
+            'rollCount': roll_count,
             'realHeight': r.get('REAL_HEIGHT', 0),
             'createTime': r.get('create_time').strftime('%Y-%m-%d %H:%M:%S')
                 if r.get('create_time') and hasattr(r.get('create_time'), 'strftime')
@@ -902,6 +914,8 @@ def api_search():
     for r in rows:
         code = str(r.get('HJ_KW_CODE', '') or '').strip()
         inbound_time = r.get('inbound_time')
+        barcode_val = r.get('barcode') or ''
+        roll_count = len([x for x in barcode_val.split(',') if x.strip()]) * 2
         results.append({
             'locationCode': code,
             'area': zone.upper(),
@@ -911,9 +925,10 @@ def api_search():
             'state': _to_int(r.get('KW_STATE')),
             'product': {
                 'materielCode': r.get('MATERIEL_CODE') or '',
-                'barcode': r.get('barcode') or '',
+                'barcode': barcode_val,
                 'spec': r.get('spec') or '',
                 'model': r.get('model') or '',
+                'rollCount': roll_count,
                 'inboundTime': inbound_time.strftime('%Y-%m-%d %H:%M:%S')
                     if inbound_time and hasattr(inbound_time, 'strftime')
                     else str(inbound_time or ''),

@@ -593,7 +593,8 @@ function selectCell(loc, cellEl) {
       <div class="row"><span class="k">产品规格</span><span class="v">${esc(loc.product.spec) || '-'}</span></div>
       <div class="row"><span class="k">产品型号</span><span class="v">${esc(loc.product.model) || '-'}</span></div>
       <div class="row"><span class="k">唯一条码</span><span class="v" style="font-family:monospace">${esc(loc.product.barcode) || '-'}</span></div>
-      <div class="row"><span class="k">来源供应商</span><span class="v">${esc(loc.product.supplier) || '-'}</span></div>
+      <div class="row"><span class="k">产品卷数</span><span class="v">${loc.product.rollCount || 0} 卷</span></div>
+      <div class="row"><span class="k">产品时间</span><span class="v">${esc(loc.product.productTime) || '-'}</span></div>
       <div class="row"><span class="k">首次入库时间</span><span class="v">${esc(loc.product.inboundTime) || '-'}</span></div>`;
   } else {
     html += `<div style="margin-top:20px;color:#94a3b8;font-size:12px;text-align:center;padding:16px;background:#f8fafc;border-radius:8px;">暂无资产负载信息</div>`;
@@ -642,8 +643,8 @@ function renderMetrics() {
 }
 
 const chartRefs = {};
-function getChart(id) { if (!chartRefs[id]) chartRefs[id] = echarts.init(document.getElementById(id)); return chartRefs[id]; }
-window.addEventListener('resize', () => { Object.values(chartRefs).forEach(c => c.resize()); });
+function getChart(id) { if (!chartRefs[id]) { var el = document.getElementById(id); if (!el) return {setOption:function(){},resize:function(){}}; try { chartRefs[id] = echarts.init(el); } catch(e) { return {setOption:function(){},resize:function(){}}; } } return chartRefs[id]; }
+window.addEventListener('resize', () => { Object.values(chartRefs).forEach(c => { try { c.resize(); } catch(e) {} }); });
 
 function renderCharts() {
   if (!dashboardData) return;
@@ -740,7 +741,8 @@ function showDetailFloat(loc) {
       <div class="row"><span class="k">产品规格</span><span class="v">${esc(loc.product.spec) || '-'}</span></div>
       <div class="row"><span class="k">产品型号</span><span class="v">${esc(loc.product.model) || '-'}</span></div>
       <div class="row"><span class="k">唯一条码</span><span class="v" style="font-family:monospace">${esc(loc.product.barcode) || '-'}</span></div>
-      <div class="row"><span class="k">来源供应商</span><span class="v">${esc(loc.product.supplier) || '-'}</span></div>
+      <div class="row"><span class="k">产品卷数</span><span class="v">${loc.product.rollCount || 0} 卷</span></div>
+      <div class="row"><span class="k">产品时间</span><span class="v">${esc(loc.product.productTime) || '-'}</span></div>
       <div class="row"><span class="k">首次入库时间</span><span class="v">${esc(loc.product.inboundTime) || '-'}</span></div>`;
   } else { html += `<div style="margin-top:20px;color:#94a3b8;font-size:12px;text-align:center;padding:16px;background:#f8fafc;border-radius:8px;">暂无资产负载信息</div>`; }
   document.getElementById('detailContent').innerHTML = html;
