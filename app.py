@@ -488,7 +488,7 @@ def api_dashboard():
                 COUNT(*)                                                           AS total_locs,
                 SUM(CASE WHEN KW_STATE = 4 THEN 1 ELSE 0 END)                      AS occupied,
                 SUM(CASE WHEN KW_STATE = 5 THEN 1 ELSE 0 END)                      AS empty_locs,
-                SUM(CASE WHEN KW_STATE IN (2, 3) THEN 1 ELSE 0 END)                AS locked,
+                SUM(CASE WHEN KW_STATE IN (1, 2, 3) THEN 1 ELSE 0 END)              AS locked,
                 SUM(CASE WHEN KW_STATE = 6 THEN 1 ELSE 0 END)                      AS empty_pallet,
                 SUM(CASE WHEN KW_STATE = 0 THEN 1 ELSE 0 END)                      AS invalid_cnt,
                 COUNT(DISTINCT CASE WHEN KW_STATE = 4 THEN r.MATERIEL_CODE END)    AS product_types,
@@ -690,7 +690,7 @@ def api_overview():
                         COUNT(*)                                                           AS total_locs,
                         SUM(CASE WHEN KW_STATE = 4 THEN 1 ELSE 0 END)                      AS occupied,
                         SUM(CASE WHEN KW_STATE = 5 THEN 1 ELSE 0 END)                      AS empty_locs,
-                        SUM(CASE WHEN KW_STATE IN (2, 3) THEN 1 ELSE 0 END)                AS locked,
+                        SUM(CASE WHEN KW_STATE IN (1, 2, 3) THEN 1 ELSE 0 END)              AS locked,
                         SUM(CASE WHEN KW_STATE = 6 THEN 1 ELSE 0 END)                      AS empty_pallet,
                         COUNT(DISTINCT CASE WHEN KW_STATE = 4 THEN r.MATERIEL_CODE END)    AS product_types,
                         COUNT(DISTINCT CASE WHEN KW_STATE = 4 THEN r.PALLET_NUMBER END)    AS pallet_count

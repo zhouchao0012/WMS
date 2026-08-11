@@ -202,8 +202,8 @@
     <div class="kpi kpi-amber">
       <div class="kpi-icon">&#9888;</div>
       <div class="kpi-val" id="kpi-locked">--</div>
-      <div class="kpi-label">作业锁定</div>
-      <div class="kpi-sub">入库/出库锁定</div>
+      <div class="kpi-label">不可用</div>
+      <div class="kpi-sub">禁用/入库/出库锁定</div>
     </div>
     <div class="kpi kpi-purple">
       <div class="kpi-icon">&#9830;</div>
@@ -228,7 +228,7 @@
       <div class="zone-metrics">
         <div class="zm"><div class="zm-val" id="zm-f-occ">--</div><div class="zm-label">有货</div></div>
         <div class="zm"><div class="zm-val" id="zm-f-emp">--</div><div class="zm-label">空闲</div></div>
-        <div class="zm"><div class="zm-val" id="zm-f-lck">--</div><div class="zm-label">锁定</div></div>
+        <div class="zm"><div class="zm-val" id="zm-f-lck">--</div><div class="zm-label">不可用</div></div>
         <div class="zm"><div class="zm-val" id="zm-f-pct">--</div><div class="zm-label">利用率</div></div>
       </div>
       <div class="zone-enter">进入 F区 详细看板 →</div>
@@ -240,7 +240,7 @@
       <div class="zone-metrics">
         <div class="zm"><div class="zm-val" id="zm-h-occ">--</div><div class="zm-label">有货</div></div>
         <div class="zm"><div class="zm-val" id="zm-h-emp">--</div><div class="zm-label">空闲</div></div>
-        <div class="zm"><div class="zm-val" id="zm-h-lck">--</div><div class="zm-label">锁定</div></div>
+        <div class="zm"><div class="zm-val" id="zm-h-lck">--</div><div class="zm-label">不可用</div></div>
         <div class="zm"><div class="zm-val" id="zm-h-pct">--</div><div class="zm-label">利用率</div></div>
       </div>
       <div class="zone-enter">进入 H区 详细看板 →</div>
@@ -257,7 +257,7 @@
     </div>
     <div class="panel">
       <div class="panel-title">&#9776; F区 vs H区 对比</div>
-      <div class="panel-subtitle">有货 / 空闲 / 锁定 / 空托 指标对比</div>
+      <div class="panel-subtitle">有货 / 空闲 / 不可用 / 空托 指标对比</div>
       <div class="chart-body" id="chartCompare" style="height:340px;"></div>
     </div>
   </div>
@@ -439,14 +439,14 @@ function renderStatusCombined() {
 
 // 2. F vs H Bar Comparison
 function renderCompare() {
-  const cats = ['有货', '无货', '锁定', '空托'];
+  const cats = ['有货', '无货', '不可用', '空托'];
   const fVals = []; const hVals = [];
   const fMark = {}, hMark = {};
   ['f','h'].forEach(z => {
     const s = cachedData.zones[z].charts.status;
     const map = {}; s.forEach(d => map[d.name] = d.value);
     const arr = z === 'f' ? fVals : hVals;
-    arr.push(map['有货']||0, map['无货']||0, (map['入库锁定']||0)+(map['出库锁定']||0), map['空托']||0);
+    arr.push(map['有货']||0, map['无货']||0, (map['禁用']||0)+(map['入库锁定']||0)+(map['出库锁定']||0), map['空托']||0);
   });
 
   ch('chartCompare').setOption({
