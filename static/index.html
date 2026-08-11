@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WMS 立体库看板 · 总览</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%236366f1'/%3E%3Ctext x='16' y='23' text-anchor='middle' fill='white' font-family='Arial Black,sans-serif' font-weight='800' font-size='18'%3EW%3C/text%3E%3C/svg%3E">
+<script src="/static/echarts.min.js"></script>
+<style>
+  :root {
+    --bg: #f0f4f9;
+    --card-bg: #ffffff;
+    --text: #0f172a;
+    --muted: #475569;
+    --blue: #3b82f6; --blue2: #2563eb; --blue-light: #eff6ff;
+    --green: #10b981; --green2: #059669; --green-light: #ecfdf5;
+    --amber: #f59e0b; --amber2: #d97706; --amber-light: #fffbeb;
+    --red: #ef4444; --red-light: #fef2f2;
+    --purple: #8b5cf6; --purple-light: #f5f3ff;
+    --teal: #14b8a6; --teal-light: #f0fdfa;
+    --shadow: 0 1px 3px rgba(15,23,42,0.04), 0 1px 2px rgba(15,23,42,0.03);
+    --shadow-md: 0 4px 12px rgba(15,23,42,0.05), 0 2px 4px rgba(15,23,42,0.02);
+    --shadow-lg: 0 10px 30px rgba(15,23,42,0.08), 0 4px 8px rgba(15,23,42,0.03);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: linear-gradient(160deg, #f8fafc 0%, #e8eef5 40%, #eef2f9 100%);
+    color: var(--text); min-height: 100vh; font-size: 14px;
+  }
+  .container { margin: 0 auto; padding: 20px 28px 32px; }
+
+  /* ===== Header ===== */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 16px; }
+  .logo-icon {
+    width: 42px; height: 42px; border-radius: 12px;
+    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 20px; font-weight: 800; box-shadow: 0 4px 12px rgba(59,130,246,0.35);
+  }
+  .topbar h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+  .topbar h1 span { font-weight: 400; color: var(--muted); font-size: 15px; margin-left: 6px; }
+  .topbar-right { display: flex; align-items: center; gap: 14px; }
+  .live-badge {
+    display: flex; align-items: center; gap: 6px; padding: 5px 12px;
+    background: #ecfdf5; color: #059669; border-radius: 20px; font-size: 12px; font-weight: 600;
+  }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #10b981; animation: pulse 2s infinite; }
+  .live-dot.error { background: #ef4444; }
+  .live-badge.error { background: #fef2f2; color: #dc2626; }
+  @keyframes pulse { 0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(16,185,129,0.4)} 50%{opacity:0.5;box-shadow:0 0 0 6px rgba(16,185,129,0)} }
+  .clock { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .btn {
+    padding: 7px 18px; border-radius: 8px; border: none; cursor: pointer;
+    font-size: 12px; font-weight: 600; transition: all 0.2s; letter-spacing: 0.3px;
+  }
+  .btn-refresh { display: inline-flex; align-items: center; gap: 6px; background: var(--blue); color: #fff; box-shadow: 0 2px 8px rgba(59,130,246,0.3); }
+  .btn-refresh:hover { background: var(--blue2); transform: translateY(-1px); }
+  .btn-refresh .refresh-icon { display: inline-flex; width: 14px; height: 14px; line-height: 1; font-size: 14px; transition: none; }
+  .btn-refresh.refreshing { pointer-events: none; opacity: 0.8; transform: none !important; box-shadow: 0 2px 8px rgba(59,130,246,0.3) !important; }
+  .btn-refresh.refreshing .refresh-icon { animation: spin 0.8s linear infinite; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  /* ===== Metric Cards (6-col) ===== */
+  .kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; margin-bottom: 20px; }
+  .kpi {
+    background: var(--card-bg); border-radius: 14px; padding: 18px 20px;
+    box-shadow: var(--shadow-md); position: relative; overflow: hidden;
+    border: 1px solid rgba(241,245,249,0.9);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+  .kpi:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+  .kpi .kpi-icon {
+    width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center;
+    justify-content: center; font-size: 18px; margin-bottom: 10px;
+  }
+  .kpi .kpi-val { font-size: 30px; font-weight: 800; letter-spacing: -1px; line-height: 1.1; }
+  .kpi .kpi-label { font-size: 12px; color: var(--muted); margin-top: 4px; font-weight: 500; }
+  .kpi .kpi-sub { font-size: 11px; color: #475569; margin-top: 2px; }
+  .kpi::after {
+    content: ''; position: absolute; top: -20px; right: -20px;
+    width: 90px; height: 90px; border-radius: 50%; opacity: 0.06; pointer-events: none;
+  }
+  .kpi.kpi-blue .kpi-icon { background: var(--blue-light); color: var(--blue); }
+  .kpi.kpi-blue .kpi-val { color: var(--blue); } .kpi.kpi-blue::after { background: var(--blue); }
+  .kpi.kpi-green .kpi-icon { background: var(--green-light); color: var(--green); }
+  .kpi.kpi-green .kpi-val { color: var(--green); } .kpi.kpi-green::after { background: var(--green); }
+  .kpi.kpi-amber .kpi-icon { background: var(--amber-light); color: var(--amber); }
+  .kpi.kpi-amber .kpi-val { color: var(--amber); } .kpi.kpi-amber::after { background: var(--amber); }
+  .kpi.kpi-purple .kpi-icon { background: var(--purple-light); color: var(--purple); }
+  .kpi.kpi-purple .kpi-val { color: var(--purple); } .kpi.kpi-purple::after { background: var(--purple); }
+  .kpi.kpi-teal .kpi-icon { background: var(--teal-light); color: var(--teal); }
+  .kpi.kpi-teal .kpi-val { color: var(--teal); } .kpi.kpi-teal::after { background: var(--teal); }
+  .kpi.kpi-red .kpi-icon { background: var(--red-light); color: var(--red); }
+  .kpi.kpi-red .kpi-val { color: var(--red); } .kpi.kpi-red::after { background: var(--red); }
+
+  /* ===== Zone Cards ===== */
+  .zone-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+  .zone {
+    display: block; text-decoration: none; color: inherit;
+    background: var(--card-bg); border-radius: 16px; padding: 24px 28px 20px;
+    box-shadow: var(--shadow-md); border: 2px solid transparent;
+    transition: all 0.3s ease; cursor: pointer; position: relative; overflow: hidden;
+  }
+  .zone:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+  .zone-f:hover { border-color: #93c5fd; }
+  .zone-h:hover { border-color: #fcd34d; }
+  .zone::before {
+    content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px;
+  }
+  .zone-f::before { background: linear-gradient(90deg, #3b82f6, #60a5fa, #93c5fd); }
+  .zone-h::before { background: linear-gradient(90deg, #f59e0b, #fbbf24, #fde68a); }
+  .zone-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .zone-top h2 { font-size: 20px; font-weight: 700; }
+  .zone-tag { padding: 4px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; }
+  .zone-f .zone-tag { background: #dbeafe; color: #1d4ed8; }
+  .zone-h .zone-tag { background: #fef3c7; color: #b45309; }
+  .zone-specs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .zone-specs span { font-size: 11px; color: var(--muted); background: #f8fafc; padding: 3px 10px; border-radius: 6px; font-weight: 500; }
+  .zone-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
+  .zm { text-align: center; }
+  .zm-val { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }
+  .zm-label { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .zone-bar-wrap { height: 8px; background: #f1f5f9; border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
+  .zone-bar { height: 100%; border-radius: 10px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+  .zone-f .zone-bar { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+  .zone-h .zone-bar { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+  .zone-enter { text-align: right; font-size: 13px; font-weight: 600; color: var(--blue); }
+
+  /* ===== Charts Layout ===== */
+  .chart-section-title {
+    font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 1px; margin: 0 0 14px 2px;
+  }
+  .chart-row { display: grid; gap: 20px; margin-bottom: 20px; }
+  .chart-row.cols-2 { grid-template-columns: 1fr 1fr; }
+  .chart-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .panel {
+    background: var(--card-bg); border-radius: 16px; padding: 22px 24px;
+    box-shadow: var(--shadow-md); border: 1px solid rgba(241,245,249,0.9);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+  .panel:hover { box-shadow: var(--shadow-lg); }
+  .panel-title { font-size: 15px; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .panel-subtitle { font-size: 11px; color: var(--muted); margin-bottom: 12px; }
+  .chart-body { width: 100%; }
+
+  /* ===== Responsive ===== */
+  @media (max-width: 1300px) {
+    .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+    .zone-grid { grid-template-columns: 1fr; }
+    .chart-row.cols-3 { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 800px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .chart-row.cols-2, .chart-row.cols-3 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ====== HEADER ====== -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="logo-icon">W</div>
+      <h1>WMS 立体库看板<span>· 总览</span></h1>
+    </div>
+    <div class="topbar-right">
+      <div class="live-badge" id="liveBadge"><div class="live-dot" id="liveDot"></div><span id="liveText">实时监控中</span></div>
+      <span class="clock" id="clockRef"></span>
+      <button class="btn btn-refresh" onclick="refreshAll()"><span class="refresh-icon">↻</span>刷新数据</button>
+    </div>
+  </div>
+
+  <!-- ====== KPI CARDS (6) ====== -->
+  <div class="kpi-grid">
+    <div class="kpi kpi-blue">
+      <div class="kpi-icon">&#9638;</div>
+      <div class="kpi-val" id="kpi-total">--</div>
+      <div class="kpi-label">总库位容量</div>
+      <div class="kpi-sub">F区 + H区合计</div>
+    </div>
+    <div class="kpi kpi-green">
+      <div class="kpi-icon">&#9635;</div>
+      <div class="kpi-val" id="kpi-occupied">--</div>
+      <div class="kpi-label">当前存货位</div>
+      <div class="kpi-sub">总利用率 <b id="kpi-pct">--</b></div>
+    </div>
+    <div class="kpi kpi-teal">
+      <div class="kpi-icon">&#8615;</div>
+      <div class="kpi-val" id="kpi-empty">--</div>
+      <div class="kpi-label">空闲可用</div>
+      <div class="kpi-sub">满足入库条件</div>
+    </div>
+    <div class="kpi kpi-amber">
+      <div class="kpi-icon">&#9888;</div>
+      <div class="kpi-val" id="kpi-locked">--</div>
+      <div class="kpi-label">作业锁定</div>
+      <div class="kpi-sub">入库/出库锁定</div>
+    </div>
+    <div class="kpi kpi-purple">
+      <div class="kpi-icon">&#9830;</div>
+      <div class="kpi-val" id="kpi-pallets">--</div>
+      <div class="kpi-label">在库托盘</div>
+      <div class="kpi-sub"><span id="kpi-prods">--</span> 种产品类型</div>
+    </div>
+    <div class="kpi kpi-red">
+      <div class="kpi-icon">&#8855;</div>
+      <div class="kpi-val" id="kpi-invalid">--</div>
+      <div class="kpi-label">异常库位</div>
+      <div class="kpi-sub">无效/禁用</div>
+    </div>
+  </div>
+
+  <!-- ====== ZONE CARDS ====== -->
+  <div class="zone-grid">
+    <a href="/f" class="zone zone-f">
+      <div class="zone-top"><h2>F区立库</h2><span class="zone-tag">F 区</span></div>
+      <div class="zone-specs"><span>11 排</span><span>8 层</span><span>39 列</span><span>3,432 库位</span></div>
+      <div class="zone-bar-wrap"><div class="zone-bar" id="bar-f" style="width:0%"></div></div>
+      <div class="zone-metrics">
+        <div class="zm"><div class="zm-val" id="zm-f-occ">--</div><div class="zm-label">有货</div></div>
+        <div class="zm"><div class="zm-val" id="zm-f-emp">--</div><div class="zm-label">空闲</div></div>
+        <div class="zm"><div class="zm-val" id="zm-f-lck">--</div><div class="zm-label">锁定</div></div>
+        <div class="zm"><div class="zm-val" id="zm-f-pct">--</div><div class="zm-label">利用率</div></div>
+      </div>
+      <div class="zone-enter">进入 F区 详细看板 →</div>
+    </a>
+    <a href="/h" class="zone zone-h">
+      <div class="zone-top"><h2>H区立库</h2><span class="zone-tag">H 区</span></div>
+      <div class="zone-specs"><span>11 排</span><span>9 层</span><span>39 列</span><span>3,861 库位</span></div>
+      <div class="zone-bar-wrap"><div class="zone-bar" id="bar-h" style="width:0%"></div></div>
+      <div class="zone-metrics">
+        <div class="zm"><div class="zm-val" id="zm-h-occ">--</div><div class="zm-label">有货</div></div>
+        <div class="zm"><div class="zm-val" id="zm-h-emp">--</div><div class="zm-label">空闲</div></div>
+        <div class="zm"><div class="zm-val" id="zm-h-lck">--</div><div class="zm-label">锁定</div></div>
+        <div class="zm"><div class="zm-val" id="zm-h-pct">--</div><div class="zm-label">利用率</div></div>
+      </div>
+      <div class="zone-enter">进入 H区 详细看板 →</div>
+    </a>
+  </div>
+
+  <!-- ====== CHARTS ROW 1: Combined Status Pie + F vs H Bar ====== -->
+  <div class="chart-section-title">库存总览分析</div>
+  <div class="chart-row cols-2">
+    <div class="panel">
+      <div class="panel-title">&#9673; 全局状态分布</div>
+      <div class="panel-subtitle">F区 + H区 合并统计</div>
+      <div class="chart-body" id="chartStatusCombined" style="height:340px;"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">&#9776; F区 vs H区 对比</div>
+      <div class="panel-subtitle">有货 / 空闲 / 锁定 / 空托 指标对比</div>
+      <div class="chart-body" id="chartCompare" style="height:340px;"></div>
+    </div>
+  </div>
+
+  <!-- ====== CHARTS ROW 2: Combined Trend + Two Gauges ====== -->
+  <div class="chart-section-title">吞吐趋势 & 利用率</div>
+  <div class="chart-row cols-3">
+    <div class="panel" style="grid-column:span 2;">
+      <div class="panel-title">&#9733; 近30天入库趋势对比</div>
+      <div class="panel-subtitle">F区（蓝色） vs H区（橙色）双线叠加</div>
+      <div class="chart-body" id="chartTrendCombined" style="height:280px;"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">&#9679; 库位利用率</div>
+      <div class="panel-subtitle">F区 & H区 各自占比</div>
+      <div class="chart-body" id="chartGauges" style="height:280px;"></div>
+    </div>
+  </div>
+
+  <!-- ====== CHARTS ROW 3: F Status Pie + H Status Pie + Total In/Out ====== -->
+  <div class="chart-section-title">分区状态详情</div>
+  <div class="chart-row cols-2">
+    <div class="panel">
+      <div class="panel-title">&#9673; F区状态构成</div>
+      <div class="panel-subtitle">按库位状态分类统计</div>
+      <div class="chart-body" id="chartStatusF" style="height:320px;"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">&#9673; H区状态构成</div>
+      <div class="panel-subtitle">按库位状态分类统计</div>
+      <div class="chart-body" id="chartStatusH" style="height:320px;"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const AUTO_REFRESH_MS = 30000;
+let cachedData = null;
+
+// Clock
+function tick() {
+  document.getElementById('clockRef').textContent = new Date().toLocaleString('zh-CN', {hour12:false});
+}
+tick(); setInterval(tick, 1000);
+
+// Chart helper
+const charts = {};
+function ch(id) {
+  if (!charts[id]) charts[id] = echarts.init(document.getElementById(id));
+  return charts[id];
+}
+window.addEventListener('resize', () => Object.values(charts).forEach(c => c.resize()));
+
+const STATUS_COLORS = {
+  '无效': '#cbd5e1', '禁用': '#94a3b8', '入库锁定': '#93c5fd',
+  '出库锁定': '#fb923c', '有货': '#34d399', '无货': '#d1d5db', '空托': '#eab308'
+};
+const STATUS_COLORS_DARK = {
+  '无效': '#94a3b8', '禁用': '#64748b', '入库锁定': '#3b82f6',
+  '出库锁定': '#ea580c', '有货': '#059669', '无货': '#9ca3af', '空托': '#ca8a04'
+};
+const TOOLTIP = {
+  backgroundColor: 'rgba(255,255,255,0.96)', borderColor: '#e2e8f0', borderWidth:1,
+  padding: [10,16], textStyle:{color:'#0f172a',fontSize:13},
+  extraCssText: 'box-shadow:0 8px 24px rgba(15,23,42,0.12);border-radius:10px;'
+};
+
+// ========== FETCH ==========
+async function fetchOverview() {
+  const badge = document.getElementById('liveBadge');
+  const dot = document.getElementById('liveDot');
+  const text = document.getElementById('liveText');
+  try {
+    const r = await fetch('/api/overview');
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    cachedData = await r.json();
+    badge.classList.remove('error'); dot.classList.remove('error');
+    text.textContent = '实时监控中';
+    updateKPIs();
+    updateZones();
+    renderAllCharts();
+  } catch(e) {
+    badge.classList.add('error'); dot.classList.add('error');
+    text.textContent = '连接异常';
+    console.error('Overview error:', e);
+  }
+}
+
+// ========== KPI CARDS ==========
+const animTimers = {};
+function animVal(el, v) {
+  const cur = parseInt(el.textContent.replace(/[^0-9]/g,'')) || 0;
+  if (cur === v) { el.textContent = v.toLocaleString(); return; }
+  const key = el.id; clearInterval(animTimers[key]);
+  const step = Math.max(1, Math.ceil(Math.abs(v - cur) / 15));
+  const dir = v > cur ? 1 : -1;
+  let n = cur;
+  animTimers[key] = setInterval(() => {
+    n += step * dir;
+    if (dir > 0 ? n >= v : n <= v) { n = v; clearInterval(animTimers[key]); }
+    el.textContent = n.toLocaleString();
+  }, 30);
+}
+
+function updateKPIs() {
+  const c = cachedData.combined;
+  animVal(document.getElementById('kpi-total'), c.total);
+  animVal(document.getElementById('kpi-occupied'), c.occupied);
+  document.getElementById('kpi-pct').textContent = c.occupiedPct + '%';
+  animVal(document.getElementById('kpi-empty'), c.empty);
+  animVal(document.getElementById('kpi-locked'), c.locked);
+  animVal(document.getElementById('kpi-pallets'), c.palletCount);
+  document.getElementById('kpi-prods').textContent = c.productTypes;
+  // Invalid = sum of invalid+disabled from both zones
+  let invalidTotal = 0;
+  ['f','h'].forEach(z => {
+    const s = cachedData.zones[z].charts.status;
+    s.forEach(d => { if (d.name === '无效' || d.name === '禁用') invalidTotal += d.value; });
+  });
+  animVal(document.getElementById('kpi-invalid'), invalidTotal);
+}
+
+// ========== ZONE CARDS ==========
+function updateZones() {
+  ['f','h'].forEach(z => {
+    const m = cachedData.zones[z].metrics;
+    const el = id => document.getElementById('zm-'+z+'-'+id);
+    el('occ').textContent = m.occupied.toLocaleString();
+    el('emp').textContent = m.empty.toLocaleString();
+    el('lck').textContent = m.locked.toLocaleString();
+    el('pct').textContent = m.occupiedPct + '%';
+    document.getElementById('bar-'+z).style.width = m.occupiedPct + '%';
+  });
+}
+
+// ========== RENDER ALL CHARTS ==========
+function renderAllCharts() {
+  renderStatusCombined();
+  renderCompare();
+  renderTrendCombined();
+  renderGauges();
+  renderStatusZF();
+  renderStatusZH();
+}
+
+// 1. Combined Status Pie
+function renderStatusCombined() {
+  const merged = {};
+  ['f','h'].forEach(z => {
+    cachedData.zones[z].charts.status.forEach(d => {
+      merged[d.name] = (merged[d.name] || 0) + d.value;
+    });
+  });
+  const data = Object.entries(merged).map(([k,v]) => ({
+    name:k, value:v, itemStyle:{color:STATUS_COLORS[k]||'#94a3b8'}
+  })).filter(d => d.value > 0);
+
+  ch('chartStatusCombined').setOption({
+    tooltip:{trigger:'item',...TOOLTIP},
+    legend:{bottom:4,textStyle:{fontSize:13,color:'#334155',fontWeight:500},itemWidth:12,itemHeight:12},
+    series:[{
+      type:'pie', radius:['50%','78%'], center:['50%','44%'],
+      itemStyle:{borderRadius:6,borderColor:'#fff',borderWidth:3},
+      label:{show:true,formatter:'{b}\n{d}%',fontSize:13,color:'#1e293b',fontWeight:500},
+      emphasis:{label:{fontSize:16,fontWeight:'bold'},scaleSize:8},
+      data
+    }]
+  });
+}
+
+// 2. F vs H Bar Comparison
+function renderCompare() {
+  const cats = ['有货', '无货', '锁定', '空托'];
+  const fVals = []; const hVals = [];
+  const fMark = {}, hMark = {};
+  ['f','h'].forEach(z => {
+    const s = cachedData.zones[z].charts.status;
+    const map = {}; s.forEach(d => map[d.name] = d.value);
+    const arr = z === 'f' ? fVals : hVals;
+    arr.push(map['有货']||0, map['无货']||0, (map['入库锁定']||0)+(map['出库锁定']||0), map['空托']||0);
+  });
+
+  ch('chartCompare').setOption({
+    tooltip:{trigger:'axis',...TOOLTIP},
+    legend:{data:['F区','H区'],bottom:0,textStyle:{fontSize:13,color:'#334155',fontWeight:500}},
+    grid:{left:50,right:24,top:20,bottom:40},
+    xAxis:{
+      type:'category',data:cats,
+      axisLabel:{fontSize:13,color:'#334155',fontWeight:600},
+      axisTick:{show:false}
+    },
+    yAxis:{
+      type:'value',
+      axisLabel:{fontSize:12,color:'#334155',fontWeight:500},
+      splitLine:{lineStyle:{type:'dashed',color:'#f1f5f9'}}
+    },
+    series:[
+      {
+        name:'F区', type:'bar', barWidth:'35%', barGap:'20%',
+        data:fVals,
+        itemStyle:{
+          borderRadius:[6,6,0,0],
+          color: new echarts.graphic.LinearGradient(0,0,0,1,[
+            {offset:0,color:'#60a5fa'},{offset:1,color:'#2563eb'}
+          ])
+        },
+        label:{show:true,position:'top',fontSize:12,color:'#334155',fontWeight:600}
+      },
+      {
+        name:'H区', type:'bar', barWidth:'35%',
+        data:hVals,
+        itemStyle:{
+          borderRadius:[6,6,0,0],
+          color: new echarts.graphic.LinearGradient(0,0,0,1,[
+            {offset:0,color:'#fbbf24'},{offset:1,color:'#d97706'}
+          ])
+        },
+        label:{show:true,position:'top',fontSize:12,color:'#334155',fontWeight:600}
+      }
+    ]
+  });
+}
+
+// 3. Combined Trend (F + H lines on one chart)
+function renderTrendCombined() {
+  const fT = cachedData.zones.f.charts.trend;
+  const hT = cachedData.zones.h.charts.trend;
+  const dates = fT.map(d => d.date);
+
+  ch('chartTrendCombined').setOption({
+    tooltip:{trigger:'axis',...TOOLTIP},
+    legend:{data:['F区入库','H区入库'],bottom:0,textStyle:{fontSize:12}},
+    grid:{left:48,right:16,top:16,bottom:36},
+    xAxis:{
+      type:'category',data:dates,
+      axisLabel:{fontSize:11,color:'#334155',interval:3},
+      axisTick:{show:false}
+    },
+    yAxis:{
+      type:'value',
+      axisLabel:{fontSize:11,color:'#334155'},
+      splitLine:{lineStyle:{type:'dashed',color:'#f1f5f9'}}
+    },
+    series:[
+      {
+        name:'F区入库',type:'line',smooth:true,symbol:'circle',symbolSize:3,
+        data:fT.map(d=>d.count),
+        lineStyle:{color:'#3b82f6',width:2.5},
+        itemStyle:{color:'#3b82f6'},
+        areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[
+          {offset:0,color:'rgba(59,130,246,0.2)'},{offset:1,color:'rgba(59,130,246,0.0)'}
+        ])}
+      },
+      {
+        name:'H区入库',type:'line',smooth:true,symbol:'circle',symbolSize:3,
+        data:hT.map(d=>d.count),
+        lineStyle:{color:'#f59e0b',width:2.5},
+        itemStyle:{color:'#f59e0b'},
+        areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[
+          {offset:0,color:'rgba(245,158,11,0.2)'},{offset:1,color:'rgba(245,158,11,0.0)'}
+        ])}
+      }
+    ]
+  });
+}
+
+// 4. Gauges (F + H utilization)
+function renderGauges() {
+  const fPct = cachedData.zones.f.metrics.occupiedPct || 0;
+  const hPct = cachedData.zones.h.metrics.occupiedPct || 0;
+
+  ch('chartGauges').setOption({
+    series:[
+      {
+        type:'gauge', center:['50%','29%'], radius:'38%',
+        startAngle:200, endAngle:-20,
+        min:0, max:100,
+        axisLine:{show:true,lineStyle:{width:14,color:[[0.3,'#10b981'],[0.7,'#3b82f6'],[1,'#ef4444']]}},
+        axisTick:{show:false},
+        splitLine:{show:false},
+        axisLabel:{show:false},
+        pointer:{length:'65%',width:5,itemStyle:{color:'#334155'}},
+        detail:{valueAnimation:true,formatter:'{value}%',fontSize:22,fontWeight:800,color:'#0f172a',offsetCenter:[0,'45%']},
+        title:{offsetCenter:[0,'75%'],fontSize:12,color:'#3b82f6',fontWeight:600},
+        data:[{value:fPct,name:'F区利用率'}]
+      },
+      {
+        type:'gauge', center:['50%','71%'], radius:'38%',
+        startAngle:200, endAngle:-20,
+        min:0, max:100,
+        axisLine:{show:true,lineStyle:{width:14,color:[[0.3,'#10b981'],[0.7,'#f59e0b'],[1,'#ef4444']]}},
+        axisTick:{show:false},
+        splitLine:{show:false},
+        axisLabel:{show:false},
+        pointer:{length:'65%',width:5,itemStyle:{color:'#475569'}},
+        detail:{valueAnimation:true,formatter:'{value}%',fontSize:22,fontWeight:800,color:'#0f172a',offsetCenter:[0,'45%']},
+        title:{offsetCenter:[0,'75%'],fontSize:12,color:'#f59e0b',fontWeight:600},
+        data:[{value:hPct,name:'H区利用率'}]
+      }
+    ]
+  });
+}
+
+// 5. F区 Status Pie
+function renderStatusZF() {
+  const data = cachedData.zones.f.charts.status.map(d => ({
+    name:d.name, value:d.value,
+    itemStyle:{color:STATUS_COLORS[d.name]||'#94a3b8'}
+  })).filter(d => d.value > 0);
+  ch('chartStatusF').setOption(pieOpt(data, 'F区状态'));
+}
+
+// 6. H区 Status Pie
+function renderStatusZH() {
+  const data = cachedData.zones.h.charts.status.map(d => ({
+    name:d.name, value:d.value,
+    itemStyle:{color:STATUS_COLORS[d.name]||'#94a3b8'}
+  })).filter(d => d.value > 0);
+  ch('chartStatusH').setOption(pieOpt(data, 'H区状态'));
+}
+
+function pieOpt(data, name) {
+  return {
+    tooltip:{trigger:'item',...TOOLTIP},
+    legend:{bottom:4,textStyle:{fontSize:13,color:'#334155',fontWeight:500},itemWidth:12,itemHeight:12},
+    series:[{
+      name, type:'pie', radius:['45%','75%'], center:['50%','46%'],
+      itemStyle:{borderRadius:5,borderColor:'#fff',borderWidth:2},
+      label:{show:true,formatter:'{b}\n{d}%',fontSize:13,color:'#1e293b',fontWeight:500},
+      emphasis:{label:{fontSize:14,fontWeight:'bold'}},
+      data
+    }]
+  };
+}
+
+// ========== INIT ==========
+function refreshAll() { const btn = document.querySelector('.btn-refresh'); if (!btn || btn.classList.contains('refreshing')) return; btn.classList.add('refreshing'); fetchOverview().finally(() => btn.classList.remove('refreshing')); }
+fetchOverview();
+setInterval(fetchOverview, AUTO_REFRESH_MS);
+</script>
+</body>
+</html>

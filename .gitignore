@@ -1,0 +1,27 @@
+# PyInstaller 编译产物 (Windows 专属)
+dist/
+build/
+*.spec
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# 敏感配置 (含数据库密码，使用 config.example.py 作为模板)
+config.py
+
+# SQLite 历史数据 (本地生成)
+history.db
+
+# IDE
+.vscode/
+.idea/
+
+# 环境
+venv/
+.venv/
+*.egg-info/
+
+# 日志
+*.log

@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>F区立体库看板</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%236366f1'/%3E%3Ctext x='16' y='23' text-anchor='middle' fill='white' font-family='Arial Black,sans-serif' font-weight='800' font-size='18'%3EW%3C/text%3E%3C/svg%3E">
+<script src="/static/echarts.min.js"></script>
+<style>
+  :root {
+    --bg-page: #fafbff;
+    --bg-card: #ffffff;
+    --text-main: #1e293b;
+    --text-muted: #475569;
+    --border-light: #e8edf4;
+    --color-primary: #6366f1;
+    --color-primary-hover: #4f46e5;
+    --color-success: #10b981;
+    --color-warning: #f59e0b;
+    --color-danger: #ef4444;
+    --shadow-card: 0 0 0 1px rgba(0,0,0,0.03), 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+    --shadow-card-hover: 0 0 0 1px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.08);
+    --shadow-float: 0 20px 60px rgba(0,0,0,0.12);
+    --radius-lg: 20px;
+    --radius-md: 14px;
+    --radius-sm: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg-page); color: var(--text-main); font-size: 13px;
+    padding: 20px 28px; min-width: 1280px; min-height: 100vh;
+  }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .back-link {
+    display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px;
+    background: rgba(99,102,241,0.06); border: 1px solid rgba(99,102,241,0.15); border-radius: 25px;
+    color: var(--color-primary); text-decoration: none; font-size: 12px; font-weight: 600;
+    transition: all 0.2s ease;
+  }
+  .back-link:hover { background: rgba(99,102,241,0.12); border-color: rgba(99,102,241,0.3); transform: translateX(-2px); }
+  h1 { font-size: 22px; font-weight: 700; color: #0f172a; letter-spacing: -0.3px; }
+  h1 small { font-size: 13px; color: var(--text-muted); font-weight: 400; margin-left: 14px; padding-left: 14px; border-left: 1.5px solid #e2e8f0; }
+  .header-right { display: flex; align-items: center; gap: 18px; font-size: 13px; color: var(--text-muted); }
+  .search-box {
+    width: 260px; padding: 8px 14px 8px 34px; font-size: 13px;
+    border: 1px solid var(--border-light); border-radius: 25px; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z'%3E%3C/path%3E%3C/svg%3E") 12px center no-repeat;
+    transition: all 0.2s ease; font-family: inherit;
+  }
+  .search-box:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+  .refresh-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none; padding: 8px 18px;
+    border-radius: 25px; cursor: pointer; font-size: 12px; font-weight: 600; color: #fff;
+    transition: all 0.2s ease; letter-spacing: 0.2px; box-shadow: 0 2px 8px rgba(99,102,241,0.25);
+  }
+  .refresh-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(99,102,241,0.35); }
+  .refresh-btn:active { transform: translateY(0); }
+  .refresh-btn .refresh-icon { display: inline-flex; width: 14px; height: 14px; line-height: 1; font-size: 14px; transition: none; }
+  .refresh-btn.refreshing { pointer-events: none; opacity: 0.85; transform: none !important; box-shadow: 0 2px 8px rgba(99,102,241,0.25) !important; }
+  .refresh-btn.refreshing .refresh-icon { animation: spin 0.8s linear infinite; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .live-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: #22c55e; margin-right: 6px; animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34,197,94,0.4); } 50% { opacity: 0.6; box-shadow: 0 0 0 6px rgba(34,197,94,0); } }
+  .search-wrap { position: relative; }
+  .search-results {
+    position: absolute; top: calc(100% + 8px); right: 0; width: 380px;
+    max-height: 340px; overflow-y: auto;
+    background: rgba(255,255,255,0.97); backdrop-filter: blur(20px);
+    border: 1px solid var(--border-light); border-radius: 16px;
+    box-shadow: var(--shadow-float); z-index: 200; display: none;
+  }
+  .search-results.show { display: block; animation: slideDown 0.2s ease-out; }
+  @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+  .search-item {
+    padding: 10px 16px; border-bottom: 1px solid #f1f5f9;
+    cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+    transition: background 0.15s ease;
+  }
+  .search-item:last-child { border-bottom: none; }
+  .search-item:hover { background: #f5f3ff; }
+  .search-item .code { font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600; color: var(--color-primary); }
+  .search-item .loc { color: var(--text-muted); font-size: 11px; background: #f1f5f9; padding: 3px 10px; border-radius: 12px; }
+  .metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 18px; }
+  .metric { 
+    background: var(--bg-card); border-radius: var(--radius-md); padding: 18px 22px; position: relative; overflow: hidden;
+    box-shadow: var(--shadow-card); transition: all 0.25s ease; cursor: default;
+  }
+  .metric::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--accent, #e2e8f0); transition: all 0.3s ease; }
+  .metric:nth-child(1) { --accent: linear-gradient(90deg, #6366f1, #8b5cf6); }
+  .metric:nth-child(2) { --accent: linear-gradient(90deg, #10b981, #34d399); }
+  .metric:nth-child(3) { --accent: linear-gradient(90deg, #06b6d4, #22d3ee); }
+  .metric:nth-child(4) { --accent: linear-gradient(90deg, #f59e0b, #fbbf24); }
+  .metric:nth-child(5) { --accent: linear-gradient(90deg, #ec4899, #f472b6); }
+  .metric:hover { transform: translateY(-3px); box-shadow: var(--shadow-card-hover); }
+  .metric-label { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+  .metric-value { font-size: 32px; font-weight: 800; color: #0f172a; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+  .metric-sub { font-size: 11px; color: #94a3b8; margin-top: 6px; font-weight: 500; }
+  .metric.accent .metric-value { color: #6366f1; }
+  .metric.success .metric-value { color: #059669; }
+  .metric.warn .metric-value { color: #d97706; }
+  .filter-bar {
+    background: var(--bg-card); border-radius: var(--radius-sm); padding: 10px 16px;
+    box-shadow: var(--shadow-card); margin-bottom: 18px;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .filter-bar strong { font-weight: 700; color: var(--text-main); font-size: 12px; margin-right: 4px; letter-spacing: 0.2px; }
+  .filter-chip[data-state="all"] { --c: #6366f1; }
+  .filter-chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 7px 16px; border: 2px solid color-mix(in srgb, var(--c) 40%, #e8edf4 60%);
+    border-radius: 24px;
+    font-size: 12px; font-weight: 600; cursor: pointer; user-select: none;
+    color: var(--c); background: #fff;
+    transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+  }
+  .filter-chip::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex-shrink: 0; transition: all 0.25s ease; }
+  .filter-chip:hover { border-color: var(--c); background: color-mix(in srgb, var(--c) 6%, #fff); transform: translateY(-1px); box-shadow: 0 2px 8px color-mix(in srgb, var(--c) 12%, transparent); }
+  .filter-chip.active { background: var(--c); border-color: var(--c); color: #fff; font-weight: 700; box-shadow: 0 4px 16px color-mix(in srgb, var(--c) 40%, transparent), 0 0 0 1px color-mix(in srgb, var(--c) 30%, transparent); }
+  .filter-chip.active::before { background: rgba(255,255,255,0.75); box-shadow: 0 0 0 2px rgba(255,255,255,0.3); }
+  .filter-indicator { margin-left: 8px; font-size: 12px; color: var(--color-primary); font-weight: 600; opacity: 0; transition: opacity 0.2s; }
+  .filter-indicator.visible { opacity: 1; }
+  .layer-grid-container { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 18px; }
+  .layer-panel { background: var(--bg-card); border-radius: var(--radius-md); padding: 14px 16px; box-shadow: var(--shadow-card); position: relative; overflow: hidden; }
+  .layer-panel::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--layer-accent, #e2e8f0); border-radius: 4px 0 0 4px; opacity: 0.4; }
+  .layer-panel:nth-child(3n-2) { --layer-accent: #6366f1; }
+  .layer-panel:nth-child(3n-1) { --layer-accent: #06b6d4; }
+  .layer-panel:nth-child(3n) { --layer-accent: #8b5cf6; }
+  .layer-panel-title {
+    font-size: 13px; font-weight: 700; margin-bottom: 10px;
+    display: flex; justify-content: space-between; align-items: center; color: var(--text-main);
+  }
+  .layer-panel-title .lp-stats { font-size: 11px; color: #475569; font-weight: 600; background: #f8fafc; padding: 3px 10px; border-radius: 12px; }
+  .layer-expand-btn {
+    width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid #e2e8f0;
+    background: #fff; color: #94a3b8; cursor: pointer; font-size: 13px;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: all 0.2s ease; flex-shrink: 0; margin-left: 4px; padding: 0; line-height: 1;
+  }
+  .layer-expand-btn:hover { background: #eef2ff; border-color: var(--color-primary); color: var(--color-primary); box-shadow: 0 2px 8px rgba(99,102,241,0.15); }
+  .layer-panel-grid { display: grid; gap: 1.5px; grid-template-columns: 16px repeat(39, 10px); grid-template-rows: 10px repeat(11, 10px); }
+  .lp-corner { background: transparent; }
+  .lp-col-h, .lp-row-h { font-size: 8px; color: #94a3b8; text-align: center; line-height: 10px; font-weight: 600; font-family: ui-monospace, monospace; }
+  .lp-cell {
+    width: 10px; height: 10px; border-radius: 2.5px;
+    background: transparent; border: 1px solid #f1f5f9;
+    cursor: pointer; transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .lp-cell.has-goods { border: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25); }
+  .lp-cell.unmapped { background: #f1f5f9 !important; border: 1px dashed #cbd5e1 !important; cursor: default; pointer-events: none; }
+  .lp-cell.invalid { background: #cbd5e1 !important; border: 1px dashed #94a3b8 !important; }
+  .lp-cell:hover { transform: scale(2); z-index: 20; box-shadow: 0 4px 12px rgba(0,0,0,0.2); border-color: #fff; border-width: 1.5px; }
+  .lp-cell.unmapped:hover, .lp-cell.invalid:hover { transform: none; box-shadow: none; }
+  .lp-cell.filtered-out {
+    background: repeating-linear-gradient(45deg, #94a3b8 0px, #94a3b8 2px, #cbd5e1 2px, #cbd5e1 5px) !important;
+    border: 1px solid #64748b !important; opacity: 0.55; cursor: default; pointer-events: none;
+  }
+  .lp-cell.selected, .expand-cell.selected { transform: scale(1.8); box-shadow: 0 0 0 3px rgba(99,102,241,0.5); z-index: 15; border-color: #fff; }
+  .detail-float {
+    position: fixed; z-index: 1100;
+    width: 370px; max-height: 560px; overflow-y: auto;
+    background: rgba(255,255,255,0.97); backdrop-filter: blur(24px);
+    border-radius: 20px; box-shadow: var(--shadow-float);
+    border: 1px solid rgba(255,255,255,0.8); padding: 22px 26px; display: none;
+  }
+  .detail-float.show { display: block; animation: popIn 0.3s cubic-bezier(0.16,1,0.3,1); }
+  @keyframes popIn { from { opacity: 0; transform: scale(0.92) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+  .detail-float .close-btn { position: absolute; top: 14px; right: 18px; cursor: pointer; font-size: 18px; color: #94a3b8; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; }
+  .detail-float .close-btn:hover { background: #f1f5f9; color: var(--text-main); }
+  .detail-float .row { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+  .detail-float .row:last-child { border-bottom: none; }
+  .detail-float .row .k { color: var(--text-muted); font-weight: 500; }
+  .detail-float .row .v { color: var(--text-main); font-weight: 700; text-align: right; }
+  .detail-float h3 { font-size: 18px; font-weight: 700; margin-bottom: 10px; color: var(--text-main); font-family: ui-monospace, "Cascadia Code", monospace; letter-spacing: -0.5px; }
+  .detail-float .badge { display: inline-block; padding: 5px 12px; border-radius: 14px; font-size: 12px; font-weight: 700; margin-bottom: 12px; }
+  .badge.s0 { background: #f1f5f9; color: #94a3b8; }
+  .badge.s1 { background: #e2e8f0; color: #334155; }
+  .badge.s2 { background: #dbeafe; color: #2563eb; }
+  .badge.s3 { background: #fff7ed; color: #ea580c; }
+  .badge.s4 { background: #ecfdf5; color: #059669; }
+  .badge.s5 { background: #f8fafc; color: #94a3b8; border: 1px solid #e2e8f0; }
+  .badge.s6 { background: #fefce8; color: #ca8a04; }
+  .badge.s-unknown { background: #f1f5f9; color: #475569; }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 18px;
+    padding: 10px 18px; font-size: 12px; color: var(--text-muted); font-weight: 600;
+    background: var(--bg-card); border-radius: var(--radius-sm); box-shadow: var(--shadow-card);
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.04); }
+  #ageLegendItems { display: contents; }
+  .legend-settings-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--border-light);
+    background: #fff; color: var(--text-muted); cursor: pointer; font-size: 14px;
+    transition: all 0.2s ease; margin-left: auto; flex-shrink: 0;
+  }
+  .legend-settings-btn:hover { background: #f5f3ff; border-color: var(--color-primary); color: var(--color-primary); }
+  .charts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+  .chart-box { 
+    background: var(--bg-card); border-radius: var(--radius-lg); padding: 18px 22px;
+    box-shadow: var(--shadow-card); height: 270px; 
+    transition: all 0.25s ease; min-width: 0; overflow: hidden; position: relative;
+  }
+  .chart-box:hover { transform: translateY(-2px); box-shadow: var(--shadow-card-hover); }
+  .chart-box .panel-title { font-size: 14px; font-weight: 700; margin-bottom: 8px; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+  .chart-box .panel-title::before { content: ''; width: 4px; height: 16px; background: var(--color-primary); border-radius: 2px; flex-shrink: 0; }
+  .settings-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15,23,42,0.35); backdrop-filter: blur(4px);
+    z-index: 900; display: none; align-items: center; justify-content: center;
+  }
+  .settings-overlay.show { display: flex; }
+  .settings-modal {
+    background: #fff; border-radius: var(--radius-lg); box-shadow: var(--shadow-float);
+    padding: 26px 30px; width: 540px; max-height: 82vh; overflow-y: auto;
+    animation: popIn 0.25s cubic-bezier(0.16,1,0.3,1);
+  }
+  .settings-modal h2 { font-size: 18px; font-weight: 700; color: var(--text-main); margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+  .settings-modal .s-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 22px; }
+  .bucket-row { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid #f1f5f9; }
+  .bucket-row:last-child { border-bottom: none; }
+  .bucket-row .b-index { width: 28px; height: 28px; border-radius: 50%; background: #f1f5f9; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--text-muted); flex-shrink: 0; }
+  .bucket-row .b-field { display: flex; flex-direction: column; gap: 2px; }
+  .bucket-row .b-field label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
+  .bucket-row input[type="number"] { width: 76px; padding: 7px 8px; font-size: 13px; border: 1px solid var(--border-light); border-radius: 8px; text-align: center; font-weight: 600; }
+  .bucket-row input[type="number"]:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+  .bucket-row input[type="color"] { width: 36px; height: 32px; border: 1px solid var(--border-light); border-radius: 8px; cursor: pointer; padding: 2px; background: #fff; }
+  .bucket-row .b-label-preview { font-size: 12px; color: var(--text-muted); min-width: 60px; text-align: center; font-weight: 700; background: #f8fafc; padding: 5px 10px; border-radius: 8px; }
+  .bucket-row .b-delete { width: 30px; height: 30px; border-radius: 50%; border: 1px solid #fee2e2; background: #fef2f2; color: #ef4444; cursor: pointer; font-size: 14px; text-align: center; transition: all 0.15s ease; flex-shrink: 0; padding: 0; line-height: 28px; font-weight: 600; }
+  .bucket-row .b-delete:hover { background: #fee2e2; border-color: #fecaca; }
+  .settings-actions { display: flex; gap: 12px; margin-top: 22px; justify-content: flex-end; }
+  .btn-primary, .btn-secondary { padding: 9px 22px; border-radius: 25px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s ease; border: none; }
+  .btn-primary { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; box-shadow: 0 2px 10px rgba(99,102,241,0.25); }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(99,102,241,0.35); }
+  .btn-secondary { background: #f1f5f9; color: var(--text-main); border: 1px solid var(--border-light); }
+  .btn-secondary:hover { background: #e2e8f0; }
+  .btn-add-bucket { display: flex; align-items: center; gap: 6px; padding: 9px 16px; border: 1.5px dashed #cbd5e1; border-radius: 25px; background: transparent; color: var(--text-muted); font-size: 12px; font-weight: 600; cursor: pointer; margin-top: 10px; width: 100%; justify-content: center; transition: all 0.2s ease; }
+  .btn-add-bucket:hover { border-color: var(--color-primary); color: var(--color-primary); background: #f5f3ff; }
+  .expand-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15,23,42,0.4); backdrop-filter: blur(4px);
+    z-index: 1000; display: none; align-items: center; justify-content: center;
+  }
+  .expand-overlay.show { display: flex; }
+  .expand-modal {
+    background: #fff; border-radius: var(--radius-lg); box-shadow: 0 24px 80px rgba(0,0,0,0.2);
+    padding: 20px 24px 24px; width: auto; max-width: 98vw; max-height: 98vh;
+    overflow: auto; animation: popIn 0.3s cubic-bezier(0.16,1,0.3,1);
+  }
+  .expand-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .expand-header-left h3 { margin: 0; font-size: 16px; font-weight: 700; color: var(--text-main); }
+  .expand-header-left p { margin: 2px 0 0; font-size: 12px; color: var(--text-muted); font-weight: 500; }
+  .expand-close-btn {
+    width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid #e2e8f0;
+    background: #fff; color: #64748b; cursor: pointer; font-size: 16px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; padding: 0;
+  }
+  .expand-close-btn:hover { background: #fef2f2; border-color: #fecaca; color: #ef4444; }
+  .expand-filter-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .expand-filter-chip { padding: 5px 13px; border-radius: 18px; font-size: 11px; font-weight: 600; border: 2px solid #e2e8f0; background: #fff; color: #64748b; cursor: pointer; transition: all 0.2s ease; user-select: none; }
+  .expand-filter-chip:hover { border-color: var(--c, #6366f1); color: var(--c, #6366f1); background: color-mix(in srgb, var(--c, #6366f1) 5%, #fff); transform: translateY(-1px); }
+  .expand-filter-chip.active { background: var(--c, #6366f1); border-color: var(--c, #6366f1); color: #fff; box-shadow: 0 3px 12px color-mix(in srgb, var(--c, #6366f1) 35%, transparent); }
+  .expand-grid-wrap { display: grid; gap: 3px; grid-template-columns: 32px repeat(39, 28px); grid-template-rows: 16px repeat(11, 28px); }
+  .expand-col-h, .expand-row-h { font-size: 10px; color: #94a3b8; font-weight: 600; font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace; text-align: center; display: flex; align-items: center; justify-content: center; }
+  .expand-cell { border-radius: 5px; background: transparent; border: 1px solid #f1f5f9; cursor: pointer; transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .expand-cell.has-goods { border: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.2); }
+  .expand-cell.unmapped { background: #e2e8f0 !important; border: 1px dashed #94a3b8 !important; cursor: default; pointer-events: none; }
+  .expand-cell.invalid { background: #cbd5e1 !important; border: 1px dashed #94a3b8 !important; }
+  .expand-cell.unmapped:hover, .expand-cell.invalid:hover { transform: none; box-shadow: none; }
+  .expand-cell.filtered-out { background: repeating-linear-gradient(45deg, #94a3b8 0px, #94a3b8 3px, #cbd5e1 3px, #cbd5e1 7px) !important; border: 1px solid #64748b !important; opacity: 0.55; cursor: default; pointer-events: none; }
+  .expand-cell:hover { transform: scale(1.3); z-index: 20; box-shadow: 0 4px 16px rgba(0,0,0,0.25); border-color: #fff; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <a href="/" class="back-link">← 返回总览</a>
+    <h1>F区立库看板 <small>WMS · 实时监控</small></h1>
+  </div>
+  <div class="header-right">
+    <span><span class="live-dot"></span>实时监控中</span>
+    <span id="updateTime">--:--:--</span>
+    <span>库位总数 <strong id="totalCount" style="color:var(--text-main);font-weight:600;">0</strong></span>
+    <div class="search-wrap">
+      <input type="text" class="search-box" id="searchBox" placeholder="搜索 物料编码/条码/规格/库位编码...">
+      <div class="search-results" id="searchResults"></div>
+    </div>
+    <button class="refresh-btn" onclick="refreshAll()"><span class="refresh-icon">↻</span>数据同步</button>
+  </div>
+</header>
+
+<section class="metrics">
+  <div class="metric"><div class="metric-label">总库位数 (Total)</div><div class="metric-value" id="m-total">0</div><div class="metric-sub">含有效库位物理总数</div></div>
+  <div class="metric success"><div class="metric-label">有货库位 (Occupied)</div><div class="metric-value" id="m-occupied">0</div><div class="metric-sub">存储空间利用率 <span id="m-occupied-pct" style="font-weight:600;color:var(--color-success)">0%</span></div></div>
+  <div class="metric accent"><div class="metric-label">空闲可用 (Available)</div><div class="metric-value" id="m-empty">0</div><div class="metric-sub">当前满足入库条件</div></div>
+  <div class="metric warn"><div class="metric-label">作业锁定 (Locked)</div><div class="metric-value" id="m-locked">0</div><div class="metric-sub">入库分配 + 出库冻结</div></div>
+  <div class="metric"><div class="metric-label">在库产品 (Products)</div><div class="metric-value" id="m-products">0</div><div class="metric-sub">共计 <span id="m-pallets" style="font-weight:600;color:var(--text-main)">0 个托盘</span></div></div>
+</section>
+
+<section class="filter-bar" id="filterBar">
+  <strong>状态视图：</strong>
+  <span class="filter-chip active" data-state="all">全景展示</span>
+  <span class="filter-chip" data-state="4" style="--c:#10b981">有货</span>
+  <span class="filter-chip" data-state="5" style="--c:#d1d5db">无货</span>
+  <span class="filter-chip" data-state="6" style="--c:#eab308">空托</span>
+  <span class="filter-chip" data-state="2" style="--c:#60a5fa">入库锁</span>
+  <span class="filter-chip" data-state="3" style="--c:#f97316">出库锁</span>
+  <span class="filter-chip" data-state="1" style="--c:#64748b">禁用</span>
+  <span class="filter-chip" data-state="0" style="--c:#94a3b8">无效</span>
+  <span class="filter-indicator" id="filterIndicator"></span>
+</section>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#d1d5db;"></div>无货</div>
+  <span id="ageLegendItems"></span>
+  <div class="legend-item"><div class="legend-dot" style="background:#eab308;"></div>空托</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#60a5fa;"></div>入库锁定</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f97316;"></div>出库锁定</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#64748b;"></div>禁用</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#cbd5e1;border:1px dashed #94a3b8"></div>无效</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f1f5f9;border:1px dashed #94a3b8"></div>未建档</div>
+  <button class="legend-settings-btn" onclick="openAgeSettings()" title="库龄分段设置">&#9881;</button>
+</div>
+
+<section class="layer-grid-container" id="layerGridContainer"></section>
+
+<div class="detail-float" id="detailFloat">
+  <span class="close-btn" onclick="closeDetail()">&#10005;</span>
+  <div id="detailContent">
+    <div style="color:#94a3b8;text-align:center;padding:50px 0;font-size:14px;">点击网格库位查看详情</div>
+  </div>
+</div>
+
+<div class="settings-overlay" id="ageSettingsOverlay" onclick="closeAgeSettings(event)">
+  <div class="settings-modal" onclick="event.stopPropagation()">
+    <h2>&#9881; 库龄分段设置</h2>
+    <div class="s-desc">自定义库存账龄的分段规则，修改后即时生效。</div>
+    <div id="ageBucketRows"></div>
+    <button class="btn-add-bucket" onclick="addBucket()">+ 新增分段</button>
+    <div class="settings-actions">
+      <button class="btn-secondary" onclick="resetAgeBuckets()">恢复默认</button>
+      <button class="btn-primary" onclick="saveAgeSettings()">保存并应用</button>
+    </div>
+  </div>
+</div>
+
+<div class="expand-overlay" id="expandOverlay" onclick="closeExpandPanel(event)">
+  <div class="expand-modal" onclick="event.stopPropagation()">
+    <div class="expand-header">
+      <div class="expand-header-left">
+        <h3 id="expandTitle">物理层</h3>
+        <p id="expandSubtitle"></p>
+      </div>
+      <button class="expand-close-btn" onclick="closeExpandPanel()">✕</button>
+    </div>
+    <div class="expand-filter-bar" id="expandFilterBar"></div>
+    <div id="expandGridContainer"></div>
+  </div>
+</div>
+
+<section class="charts">
+  <div class="chart-box"><div class="panel-title">资产状态构成</div><div id="chartStatus" style="width:100%;height:210px;"></div></div>
+  <div class="chart-box"><div class="panel-title">库存周转健康度（库龄）</div><div id="chartAge" style="width:100%;height:210px;"></div></div>
+  <div class="chart-box"><div class="panel-title">空间载荷分布（各层有货率）</div><div id="chartLayer" style="width:100%;height:210px;"></div></div>
+  <div class="chart-box"><div class="panel-title">主力存货型号 TOP</div><div id="chartSpec" style="width:100%;height:210px;"></div></div>
+  <div class="chart-box" style="grid-column: span 2;"><div class="panel-title">业务吞吐趋势（近 30 天入库）</div><div id="chartTrend" style="width:100%;height:210px;"></div></div>
+</section>
+
+<script>
+const ZONE = 'f';
+window.AGE_BUCKETS = window.AGE_BUCKETS || [
+  { maxDays: 7, label: '≤7天', chartColor: '#6ee7b7', bg: '#6ee7b7', border: '#34d399' },
+  { maxDays: 30, label: '8-30天', chartColor: '#34d399', bg: '#34d399', border: '#10b981' },
+  { maxDays: 60, label: '31-60天', chartColor: '#059669', bg: '#059669', border: '#047857' },
+  { maxDays: null, label: '>60天', chartColor: '#047857', bg: '#047857', border: '#065f46' }
+];
+
+const TOTAL_COLS = 39;
+let TOTAL_LAYERS = 8;
+let TOTAL_ROWS = 11;
+const AUTO_REFRESH_MS = 30000;
+let activeStates = new Set();
+let allDataByLayer = {};
+let dashboardData = null;
+
+const STATE_COLORS = {
+  0: { bg: '#cbd5e1', label: '无效' },
+  1: { bg: '#64748b', label: '禁用' },
+  2: { bg: '#60a5fa', label: '入库锁定' },
+  3: { bg: '#f97316', label: '出库锁定' },
+  4: { bg: '#10b981', label: '有货' },
+  5: { bg: '#d1d5db', label: '无货' },
+  6: { bg: '#eab308', label: '空托' },
+};
+
+function getStateStyle(state) { return STATE_COLORS[state] || { bg: '#f1f5f9', label: '未知(' + state + ')' }; }
+function getAgeColor(days) {
+  var buckets = window.AGE_BUCKETS || [];
+  for (var i = 0; i < buckets.length; i++) {
+    if (buckets[i].maxDays === null || days <= buckets[i].maxDays) {
+      return { bg: buckets[i].bg, border: buckets[i].border, label: buckets[i].label };
+    }
+  }
+  return { bg: '#ef4444', border: '#b91c1c', label: '超龄' };
+}
+
+const API = '/api';
+
+async function fetchAllLocations() {
+  const resp = await fetch(`${API}/locations/all?zone=${ZONE}`);
+  if (!resp.ok) throw new Error('获取库位数据失败');
+  return resp.json();
+}
+
+async function fetchDashboard() {
+  const buckets = (window.AGE_BUCKETS || []).map(b => b.maxDays).filter(d => d != null);
+  const qs = buckets.length ? `&ageBuckets=${buckets.join(',')}` : '';
+  const resp = await fetch(`${API}/dashboard?zone=${ZONE}${qs}`);
+  if (!resp.ok) throw new Error('获取看板数据失败');
+  return resp.json();
+}
+
+async function fetchSearch(keyword) {
+  const resp = await fetch(`${API}/search?zone=${ZONE}&q=${encodeURIComponent(keyword)}`);
+  if (!resp.ok) throw new Error('搜索失败');
+  return resp.json();
+}
+
+function calcAgeDays(inboundTime) {
+  if (!inboundTime) return 0;
+  return Math.max(0, Math.floor((Date.now() - new Date(inboundTime).getTime()) / 86400000));
+}
+
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+function getGridDims(data) {
+  let maxR = 0, maxC = 0;
+  data.forEach(d => { const r = parseInt(d.row) || 0, c = parseInt(d.col) || 0; if (r > maxR) maxR = r; if (c > maxC) maxC = c; });
+  return { rows: Math.max(maxR, TOTAL_ROWS, 1), cols: Math.max(maxC, TOTAL_COLS, 1) };
+}
+
+function renderAllGrids() {
+  const container = document.getElementById('layerGridContainer');
+  container.innerHTML = '';
+  for (let layer = 1; layer <= TOTAL_LAYERS; layer++) {
+    const data = allDataByLayer[layer] || [];
+    if (data.length === 0) {
+      const panel = el('div', 'layer-panel');
+      const title = el('div', 'layer-panel-title');
+      title.innerHTML = `<span>第 ${layer} 层</span><span class="lp-stats" style="color:#475569;">数据库无此层数据</span>`;
+      panel.appendChild(title); container.appendChild(panel); continue;
+    }
+    const occupied = data.filter(d => d.state === 4).length;
+    const total = data.filter(d => d.state !== 0).length;
+    const dims = getGridDims(data);
+    const locMap = {};
+    data.forEach(d => { locMap[(parseInt(d.row) || 0) + '-' + (parseInt(d.col) || 0)] = d; });
+    const panel = el('div', 'layer-panel');
+    const title = el('div', 'layer-panel-title');
+    title.innerHTML = `<span>第 ${layer} 层</span><span class="lp-stats">装载量 ${occupied} / 有效容量 ${total}</span><button class="layer-expand-btn" onclick="event.stopPropagation();openExpandPanel(${layer})" title="放大查看">&#x26F6;</button>`;
+    panel.appendChild(title);
+    const grid = el('div', 'layer-panel-grid');
+    grid.dataset.layer = layer;
+    grid.style.gridTemplateColumns = `16px repeat(${dims.cols}, 10px)`;
+    grid.style.gridTemplateRows = `10px repeat(${dims.rows}, 10px)`;
+    grid.appendChild(el('div', 'lp-corner', ''));
+    for (let c = 1; c <= dims.cols; c++) { grid.appendChild(el('div', 'lp-col-h', c % 5 === 0 || c === 1 ? c : '')); }
+    for (let r = 1; r <= dims.rows; r++) {
+      grid.appendChild(el('div', 'lp-row-h', r));
+      for (let c = 1; c <= dims.cols; c++) {
+        const cell = el('div', 'lp-cell');
+        const loc = locMap[r + '-' + c];
+        if (!loc) { cell.classList.add('unmapped'); cell.title = `未建档 (排${r}, 列${c})`; grid.appendChild(cell); continue; }
+        let bg, label;
+        if (loc.state === 0) { cell.classList.add('invalid'); }
+        if (loc.state === 4 && loc.product) {
+          const ageDays = calcAgeDays(loc.product.inboundTime);
+          const ac = getAgeColor(ageDays);
+          bg = ac.bg; label = `有货·${ac.label}`; cell.classList.add('has-goods');
+        } else {
+          const sc = getStateStyle(loc.state); bg = sc.bg; label = sc.label;
+        }
+        cell.style.background = bg;
+        cell.dataset.locCode = loc.locationCode; cell.dataset.state = loc.state;
+        cell.dataset.row = r; cell.dataset.layer = layer;
+        cell.title = `${loc.locationCode} · ${label}`;
+        if (activeStates.size > 0 && !activeStates.has(loc.state)) { cell.classList.add('filtered-out'); }
+        cell.onclick = () => selectCell(loc, cell);
+        grid.appendChild(cell);
+      }
+    }
+    panel.appendChild(grid);
+    container.appendChild(panel);
+  }
+}
+
+let currentExpandLayer = 0;
+let expandActiveStates = new Set();
+
+function openExpandPanel(layer) {
+  closeDetail();
+  currentExpandLayer = layer; expandActiveStates = new Set();
+  const data = allDataByLayer[layer] || [];
+  if (data.length === 0) { alert('第 ' + layer + ' 层无任何库位数据，无法放大查看。'); return; }
+  const occupied = data.filter(d => d.state === 4).length;
+  const total = data.filter(d => d.state !== 0).length;
+  document.getElementById('expandTitle').textContent = `第 ${layer} 层`;
+  document.getElementById('expandSubtitle').textContent = `装载 ${occupied} / 有效容量 ${total} 个库位`;
+  renderExpandFilterBar(); renderExpandGrid();
+  document.getElementById('expandOverlay').classList.add('show');
+}
+
+function closeExpandPanel(e) {
+  if (e && e.target !== document.getElementById('expandOverlay')) return;
+  document.getElementById('expandOverlay').classList.remove('show');
+}
+
+function renderExpandFilterBar() {
+  const bar = document.getElementById('expandFilterBar'); bar.innerHTML = '';
+  const sc = { 0:'#94a3b8', 1:'#64748b', 2:'#60a5fa', 3:'#f97316', 4:'#10b981', 5:'#d1d5db', 6:'#eab308' };
+  const states = [{ s: 1, l: '禁用' }, { s: 2, l: '入库锁定' }, { s: 3, l: '出库锁定' }, { s: 4, l: '有货' }, { s: 5, l: '无货' }, { s: 6, l: '空托' }, { s: 0, l: '无效' }];
+  const allChip = el('div', 'expand-filter-chip'); allChip.textContent = '全部';
+  allChip.style.setProperty('--c', '#6366f1');
+  if (expandActiveStates.size === 0) allChip.classList.add('active');
+  allChip.addEventListener('click', function() { expandActiveStates = new Set(); renderExpandFilterBar(); renderExpandGrid(); });
+  bar.appendChild(allChip);
+  states.forEach(function(st) {
+    const chip = el('div', 'expand-filter-chip'); chip.textContent = st.l;
+    chip.style.setProperty('--c', sc[st.s]);
+    if (expandActiveStates.has(st.s)) chip.classList.add('active');
+    chip.addEventListener('click', function() {
+      if (expandActiveStates.has(st.s)) expandActiveStates.delete(st.s); else expandActiveStates.add(st.s);
+      renderExpandFilterBar(); renderExpandGrid();
+    });
+    bar.appendChild(chip);
+  });
+}
+
+function renderExpandGrid() {
+  const layer = currentExpandLayer; const data = allDataByLayer[layer] || [];
+  const dims = getGridDims(data); const locMap = {};
+  data.forEach(d => { locMap[(parseInt(d.row) || 0) + '-' + (parseInt(d.col) || 0)] = d; });
+  const container = document.getElementById('expandGridContainer'); container.innerHTML = '';
+  const wrap = el('div', 'expand-grid-wrap');
+  wrap.style.gridTemplateColumns = `32px repeat(${dims.cols}, 28px)`;
+  wrap.style.gridTemplateRows = `16px repeat(${dims.rows}, 28px)`;
+  wrap.appendChild(el('div', 'expand-corner', ''));
+  for (let c = 1; c <= dims.cols; c++) { wrap.appendChild(el('div', 'expand-col-h', c % 5 === 0 || c === 1 ? c : '')); }
+  for (let r = 1; r <= dims.rows; r++) {
+    wrap.appendChild(el('div', 'expand-row-h', r));
+    for (let c = 1; c <= dims.cols; c++) {
+      const cell = el('div', 'expand-cell'); const loc = locMap[r + '-' + c];
+      if (!loc) { cell.classList.add('unmapped'); cell.title = `未建档 (排${r}, 列${c})`; wrap.appendChild(cell); continue; }
+      if (expandActiveStates.size > 0 && !expandActiveStates.has(loc.state)) { cell.classList.add('filtered-out'); wrap.appendChild(cell); continue; }
+      let bg, label;
+      if (loc.state === 0) cell.classList.add('invalid');
+      if (loc.state === 4 && loc.product) {
+        const ageDays = calcAgeDays(loc.product.inboundTime); const ac = getAgeColor(ageDays);
+        bg = ac.bg; label = `有货·${ac.label}`; cell.classList.add('has-goods');
+      } else { const sc = getStateStyle(loc.state); bg = sc.bg; label = sc.label; }
+      cell.style.background = bg;
+      cell.title = `${loc.locationCode} | ${label}`; cell.dataset.loc = loc.locationCode;
+      cell.addEventListener('click', function() { selectCell(loc, cell); });
+      wrap.appendChild(cell);
+    }
+  }
+  container.appendChild(wrap);
+}
+
+function selectCell(loc, cellEl) {
+  document.querySelectorAll('.lp-cell.selected, .expand-cell.selected').forEach(c => c.classList.remove('selected'));
+  cellEl.classList.add('selected');
+  const stateLabel = loc.state === 4 ? '有货存栏' : getStateStyle(loc.state).label;
+  const badgeClass = STATE_COLORS[loc.state] ? ('s' + loc.state) : 's-unknown';
+  let ageInfo = '';
+  if (loc.state === 4 && loc.product) {
+    const ageDays = calcAgeDays(loc.product.inboundTime); const ac = getAgeColor(ageDays);
+    ageInfo = `<div class="row"><span class="k">在库账龄</span><span class="v" style="color:${ac.border}">${ageDays} 天（${ac.label}）</span></div>`;
+  }
+  let html = `<div style="display:flex; justify-content:space-between; align-items:flex-start;"><h3>${esc(loc.locationCode)}</h3><div class="badge ${badgeClass}">${esc(stateLabel)}</div></div>
+    <div class="row"><span class="k">空间归属</span><span class="v">F区</span></div>
+    <div class="row"><span class="k">物理坐标 (排/层/列)</span><span class="v">${loc.row} 排 · ${loc.layer} 层 · ${loc.col} 列</span></div>${ageInfo}`;
+  if (loc.product) {
+    html += `<div style="margin-top:12px;padding-top:12px;border-top:1px dashed #e2e8f0;"></div>
+      <div class="row"><span class="k">载具托盘号</span><span class="v">${esc(loc.product.palletNumber) || '-'}</span></div>
+      <div class="row"><span class="k">物资编码</span><span class="v" style="color:var(--color-primary)">${esc(loc.product.materielCode) || '-'}</span></div>
+      <div class="row"><span class="k">产品规格</span><span class="v">${esc(loc.product.spec) || '-'}</span></div>
+      <div class="row"><span class="k">产品型号</span><span class="v">${esc(loc.product.model) || '-'}</span></div>
+      <div class="row"><span class="k">唯一条码</span><span class="v" style="font-family:monospace">${esc(loc.product.barcode) || '-'}</span></div>
+      <div class="row"><span class="k">来源供应商</span><span class="v">${esc(loc.product.supplier) || '-'}</span></div>
+      <div class="row"><span class="k">首次入库时间</span><span class="v">${esc(loc.product.inboundTime) || '-'}</span></div>`;
+  } else {
+    html += `<div style="margin-top:20px;color:#94a3b8;font-size:12px;text-align:center;padding:16px;background:#f8fafc;border-radius:8px;">暂无资产负载信息</div>`;
+  }
+  document.getElementById('detailContent').innerHTML = html;
+  const floatPanel = document.getElementById('detailFloat');
+  floatPanel.classList.remove('show'); void floatPanel.offsetWidth;
+  const cellRect = cellEl.getBoundingClientRect();
+  const gap = 10, panelW = 360, edgePad = 12;
+  let left = cellRect.right + gap;
+  if (left + panelW > window.innerWidth - edgePad) { left = cellRect.left - panelW - gap; if (left < edgePad) left = edgePad; }
+  let top = cellRect.top;
+  floatPanel.style.visibility = 'hidden'; floatPanel.style.display = 'block';
+  const approxH = floatPanel.scrollHeight;
+  floatPanel.style.display = ''; floatPanel.style.visibility = '';
+  if (top + approxH > window.innerHeight - edgePad) { top = Math.max(edgePad, cellRect.bottom - approxH); }
+  if (top < edgePad) top = edgePad;
+  floatPanel.style.left = left + 'px'; floatPanel.style.top = top + 'px'; floatPanel.style.right = 'auto'; floatPanel.style.bottom = 'auto';
+  floatPanel.classList.add('show');
+}
+
+function closeDetail() {
+  document.getElementById('detailFloat').classList.remove('show');
+  document.querySelectorAll('.lp-cell.selected, .expand-cell.selected').forEach(c => c.classList.remove('selected'));
+}
+
+document.addEventListener('click', function(e) {
+  var panel = document.getElementById('detailFloat');
+  if (!panel.classList.contains('show')) return;
+  if (panel.contains(e.target)) return;
+  if (e.target.closest('.lp-cell') || e.target.closest('.expand-cell')) return;
+  closeDetail();
+});
+
+function renderMetrics() {
+  if (!dashboardData) return;
+  const m = dashboardData.metrics;
+  document.getElementById('totalCount').textContent = m.total.toLocaleString();
+  document.getElementById('m-total').textContent = m.total.toLocaleString();
+  document.getElementById('m-occupied').textContent = m.occupied.toLocaleString();
+  document.getElementById('m-occupied-pct').textContent = m.total ? (m.occupied / m.total * 100).toFixed(1) + '%' : '0%';
+  document.getElementById('m-empty').textContent = m.empty.toLocaleString();
+  document.getElementById('m-locked').textContent = m.locked.toLocaleString();
+  document.getElementById('m-products').textContent = m.productTypes;
+  document.getElementById('m-pallets').textContent = m.palletCount + ' 个';
+}
+
+const chartRefs = {};
+function getChart(id) { if (!chartRefs[id]) chartRefs[id] = echarts.init(document.getElementById(id)); return chartRefs[id]; }
+window.addEventListener('resize', () => { Object.values(chartRefs).forEach(c => c.resize()); });
+
+function renderCharts() {
+  if (!dashboardData) return;
+  const ch = dashboardData.charts;
+  const tooltipStyle = { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderColor: '#e2e8f0', borderWidth: 1, padding: [10, 14], textStyle: { color: '#0f172a', fontSize: 12 }, extraCssText: 'box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.08); border-radius: 8px;' };
+  const statusColors = { '无效': '#cbd5e1', '禁用': '#94a3b8', '入库锁定': '#93c5fd', '出库锁定': '#fb923c', '有货': '#34d399', '无货': '#d1d5db', '空托': '#eab308' };
+  getChart('chartStatus').setOption({
+    tooltip: { trigger: 'item', ...tooltipStyle }, legend: { bottom: 0, fontSize: 11, textStyle: { color: '#334155' }, itemWidth: 12, itemHeight: 12 },
+    series: [{ type: 'pie', radius: ['42%', '65%'], center: ['50%', '40%'], data: ch.status, itemStyle: { color: p => statusColors[p.name] || '#ccc', borderColor: '#fff', borderWidth: 2, borderRadius: 4 }, label: { show: false } }]
+  });
+  (function() {
+    var buckets = window.AGE_BUCKETS || [];
+    var fallbackPalette = ['#10b981','#3b82f6','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316'];
+    getChart('chartAge').setOption({
+      tooltip: { trigger: 'item', ...tooltipStyle }, legend: { bottom: 0, fontSize: 11, textStyle: { color: '#334155' } },
+      series: [{ type: 'pie', radius: ['45%', '70%'], center: ['50%', '42%'], data: ch.age, itemStyle: { color: function(p) { var b = buckets[p.dataIndex]; return (b && b.chartColor) ? b.chartColor : fallbackPalette[p.dataIndex % fallbackPalette.length]; }, borderColor: '#fff', borderWidth: 2, borderRadius: 4 }, label: { fontSize: 12, color: '#334155', formatter: '{b}\n{d}%' } }]
+    });
+  })();
+  getChart('chartLayer').setOption({
+    tooltip: { trigger: 'axis', ...tooltipStyle }, grid: { left: 40, right: 12, top: 20, bottom: 24 },
+    xAxis: { type: 'category', data: ch.layer.map(d => d.layer), axisLabel: { fontSize: 11, color: '#334155' }, axisLine: { lineStyle: { color: '#e2e8f0' } }, axisTick: { show: false } },
+    yAxis: { type: 'value', axisLabel: { fontSize: 11, color: '#334155', formatter: '{value}%' }, splitLine: { lineStyle: { type: 'dashed', color: '#f1f5f9' } } },
+    series: [{ type: 'bar', barWidth: '50%', data: ch.layer.map(d => d.pct), itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{offset: 0, color: '#60a5fa'}, {offset: 1, color: '#2563eb'}]), borderRadius: [4, 4, 0, 0], shadowColor: 'rgba(37,99,235,0.2)', shadowBlur: 8, shadowOffsetY: 4 }, label: { show: true, position: 'top', fontSize: 10, color: '#334155', formatter: '{c}%' } }]
+  });
+  getChart('chartSpec').setOption({
+    tooltip: { trigger: 'axis', ...tooltipStyle }, grid: { left: 100, right: 24, top: 12, bottom: 24 },
+    xAxis: { type: 'value', axisLabel: { fontSize: 11, color: '#334155' }, splitLine: { lineStyle: { type: 'dashed', color: '#f1f5f9' } } },
+    yAxis: { type: 'category', data: ch.spec.map(s => s.spec).reverse(), axisLabel: { fontSize: 11, color: '#334155' }, axisLine: { show: false }, axisTick: { show: false } },
+    series: [{ type: 'bar', barWidth: '60%', data: ch.spec.map(s => s.count).reverse(), itemStyle: { color: new echarts.graphic.LinearGradient(1, 0, 0, 0, [{offset: 0, color: '#34d399'}, {offset: 1, color: '#059669'}]), borderRadius: [0, 4, 4, 0] }, label: { show: true, position: 'right', fontSize: 11, color: '#334155' } }]
+  });
+  getChart('chartTrend').setOption({
+    tooltip: { trigger: 'axis', ...tooltipStyle }, grid: { left: 40, right: 16, top: 20, bottom: 24 },
+    xAxis: { type: 'category', data: ch.trend.map(d => d.date), axisLabel: { fontSize: 11, color: '#334155', interval: 3 }, axisLine: { lineStyle: { color: '#e2e8f0' } }, axisTick: { show: false } },
+    yAxis: { type: 'value', axisLabel: { fontSize: 11, color: '#334155' }, splitLine: { lineStyle: { type: 'dashed', color: '#f1f5f9' } } },
+    series: [{ type: 'line', data: ch.trend.map(d => d.count), smooth: true, symbol: 'none', lineStyle: { color: '#2563eb', width: 3 }, itemStyle: { color: '#2563eb' }, areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{offset: 0, color: 'rgba(37,99,235,0.25)'}, {offset: 1, color: 'rgba(37,99,235,0.0)'}]) } }]
+  });
+}
+
+let searchTimer = null;
+function bindSearch() {
+  const box = document.getElementById('searchBox');
+  const results = document.getElementById('searchResults');
+  box.addEventListener('input', e => {
+    const kw = e.target.value.trim(); clearTimeout(searchTimer);
+    if (!kw) { results.classList.remove('show'); return; }
+    results.innerHTML = '<div style="padding:16px;color:#94a3b8;text-align:center;font-size:12px;">正在检索中...</div>';
+    results.classList.add('show');
+    searchTimer = setTimeout(async () => {
+      try {
+        const list = await fetchSearch(kw);
+        if (!list.length) { results.innerHTML = '<div style="padding:16px;color:#ef4444;text-align:center;font-size:12px;">未匹配到相关产品资产</div>'; return; }
+        results.innerHTML = list.map(d => {
+          const mainText = d.product.materielCode || d.locationCode;
+          const subParts = []; if (d.product.spec) subParts.push(d.product.spec); if (d.product.barcode) subParts.push(d.product.barcode); if (d.stateName) subParts.push(d.stateName);
+          return `<div class="search-item" data-code="${esc(d.locationCode)}" data-row="${d.row}" data-layer="${d.layer}"><div><div class="code">${esc(mainText)}</div><div style="font-size:11px;color:#64748b;margin-top:4px;">${esc(subParts.join(' · ')) || '库位'}</div></div><div class="loc">${d.row}排 ${d.layer}层 ${esc(d.locationCode)}</div></div>`;
+        }).join('');
+        results.querySelectorAll('.search-item').forEach(it => { it.onclick = () => { const code = it.dataset.code; const row = parseInt(it.dataset.row); const layer = parseInt(it.dataset.layer); highlightLocation(code, row, layer); results.classList.remove('show'); box.value = ''; }; });
+      } catch (err) { results.innerHTML = `<div style="padding:16px;color:#ef4444;text-align:center;">${esc(err.message)}</div>`; }
+    }, 300);
+  });
+  document.addEventListener('click', e => { if (!e.target.closest('.search-wrap')) results.classList.remove('show'); });
+}
+
+function highlightLocation(code, row, layer) {
+  const panel = document.querySelector(`.layer-panel-grid[data-layer="${layer}"]`);
+  if (panel) { const rect = panel.getBoundingClientRect(); window.scrollTo({ top: rect.top + window.scrollY - 100, behavior: 'smooth' }); }
+  setTimeout(() => {
+    document.querySelectorAll('.lp-cell.selected, .expand-cell.selected').forEach(c => c.classList.remove('selected'));
+    const target = document.querySelector(`.lp-cell[data-loc-code="${code}"]`);
+    if (target) { target.classList.add('selected'); target.click(); } else { showDetailCardByApi(code); }
+  }, 400);
+}
+
+async function showDetailCardByApi(code) {
+  try {
+    const loc = await (await fetch(`/api/location/${code}?zone=${ZONE}`)).json();
+    if (loc.error) { console.warn('库位详情获取失败:', loc.error); return; }
+    showDetailFloat({ locationCode: loc.locationCode, area: loc.area, row: loc.row, layer: loc.layer, col: loc.col, state: loc.state, product: loc.product || null });
+  } catch (e) { console.error('获取库位详情失败:', e); }
+}
+
+function showDetailFloat(loc) {
+  const stateLabel = loc.state === 4 ? '有货存栏' : getStateStyle(loc.state).label;
+  const badgeClass = STATE_COLORS[loc.state] ? ('s' + loc.state) : 's-unknown';
+  let ageInfo = '';
+  if (loc.state === 4 && loc.product) { const ageDays = calcAgeDays(loc.product.inboundTime); const ac = getAgeColor(ageDays); ageInfo = `<div class="row"><span class="k">在库账龄</span><span class="v" style="color:${ac.border}">${ageDays} 天（${ac.label}）</span></div>`; }
+  let html = `<div style="display:flex; justify-content:space-between; align-items:flex-start;"><h3>${esc(loc.locationCode)}</h3><div class="badge ${badgeClass}">${esc(stateLabel)}</div></div>
+    <div class="row"><span class="k">空间归属</span><span class="v">F区</span></div>
+    <div class="row"><span class="k">物理坐标 (排/层/列)</span><span class="v">${loc.row} 排 · ${loc.layer} 层 · ${loc.col} 列</span></div>${ageInfo}`;
+  if (loc.product) {
+    html += `<div style="margin-top:12px;padding-top:12px;border-top:1px dashed #e2e8f0;"></div>
+      <div class="row"><span class="k">载具托盘号</span><span class="v">${esc(loc.product.palletNumber) || '-'}</span></div>
+      <div class="row"><span class="k">物资编码</span><span class="v" style="color:var(--color-primary)">${esc(loc.product.materielCode) || '-'}</span></div>
+      <div class="row"><span class="k">产品规格</span><span class="v">${esc(loc.product.spec) || '-'}</span></div>
+      <div class="row"><span class="k">产品型号</span><span class="v">${esc(loc.product.model) || '-'}</span></div>
+      <div class="row"><span class="k">唯一条码</span><span class="v" style="font-family:monospace">${esc(loc.product.barcode) || '-'}</span></div>
+      <div class="row"><span class="k">来源供应商</span><span class="v">${esc(loc.product.supplier) || '-'}</span></div>
+      <div class="row"><span class="k">首次入库时间</span><span class="v">${esc(loc.product.inboundTime) || '-'}</span></div>`;
+  } else { html += `<div style="margin-top:20px;color:#94a3b8;font-size:12px;text-align:center;padding:16px;background:#f8fafc;border-radius:8px;">暂无资产负载信息</div>`; }
+  document.getElementById('detailContent').innerHTML = html;
+  const floatPanel = document.getElementById('detailFloat');
+  floatPanel.classList.remove('show'); void floatPanel.offsetWidth;
+  floatPanel.style.left = Math.max(12, (window.innerWidth - 360) / 2) + 'px';
+  floatPanel.style.top = Math.max(12, (window.innerHeight - 480) / 2) + 'px';
+  floatPanel.style.right = 'auto'; floatPanel.style.bottom = 'auto';
+  floatPanel.classList.add('show');
+}
+
+function updateFilterIndicator() {
+  const ind = document.getElementById('filterIndicator');
+  if (!ind) return;
+  if (activeStates.size > 0) { ind.textContent = '（已筛选 ' + activeStates.size + ' 个状态）'; ind.classList.add('visible'); }
+  else { ind.textContent = ''; ind.classList.remove('visible'); }
+}
+
+function bindControls() {
+  document.querySelectorAll('.filter-chip').forEach(chip => {
+    chip.onclick = () => {
+      const state = chip.dataset.state;
+      if (state === 'all') { activeStates.clear(); document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active')); chip.classList.add('active'); }
+      else {
+        const s = parseInt(state);
+        document.querySelector('.filter-chip[data-state="all"]').classList.remove('active');
+        if (activeStates.has(s)) { activeStates.delete(s); chip.classList.remove('active'); }
+        else { activeStates.add(s); chip.classList.add('active'); }
+        if (activeStates.size === 0) { document.querySelector('.filter-chip[data-state="all"]').classList.add('active'); }
+      }
+      updateFilterIndicator(); renderAllGrids();
+    };
+  });
+}
+
+async function loadAllLayers() {
+  try { allDataByLayer = await fetchAllLocations(); renderAllGrids(); } catch (err) { console.error('库位数据加载失败:', err); }
+}
+async function loadDashboard() {
+  try { dashboardData = await fetchDashboard(); renderMetrics(); renderCharts(); } catch (err) { console.error('看板数据加载失败:', err); }
+}
+function refreshData() { document.getElementById('updateTime').textContent = new Date().toTimeString().slice(0,8); }
+
+const AGE_STORAGE_KEY = 'wms_age_buckets_f';
+const AGE_COLOR_PALETTE = ['#6ee7b7', '#34d399', '#10b981', '#059669', '#047857', '#065f46', '#064e3b', '#022c22'];
+
+function getDefaultBuckets() { return [{ maxDays: 7, label: '≤7天', chartColor: '#6ee7b7' }, { maxDays: 30, label: '8-30天', chartColor: '#34d399' }, { maxDays: 60, label: '31-60天', chartColor: '#059669' }, { maxDays: null, label: '>60天', chartColor: '#047857' }]; }
+function hexToGradient(hex) { return hex; }
+function darkenHex(hex) {
+  var r = parseInt(hex.slice(1,3), 16), g = parseInt(hex.slice(3,5), 16), b = parseInt(hex.slice(5,7), 16);
+  return '#' + [Math.max(0, Math.round(r * 0.75)), Math.max(0, Math.round(g * 0.75)), Math.max(0, Math.round(b * 0.75))].map(function(x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+}
+function hydrateBuckets(raw) { return raw.map(function(b) { return { maxDays: b.maxDays, label: b.label, chartColor: b.chartColor, bg: hexToGradient(b.chartColor), border: darkenHex(b.chartColor) }; }); }
+function autoLabel(buckets, idx) { if (idx === buckets.length - 1) return idx === 0 ? '全部' : '>' + buckets[idx - 1].maxDays + '天'; if (idx === 0) return '≤' + buckets[idx].maxDays + '天'; return (buckets[idx - 1].maxDays + 1) + '-' + buckets[idx].maxDays + '天'; }
+
+function loadAgeBuckets() {
+  try {
+    var raw = localStorage.getItem(AGE_STORAGE_KEY);
+    if (raw) { var parsed = JSON.parse(raw); if (Array.isArray(parsed) && parsed.length >= 2) { window.AGE_BUCKETS = hydrateBuckets(parsed); return; } }
+  } catch (e) {}
+  fetch(`/api/config?zone=${ZONE}`).then(r => r.json()).then(cfg => {
+    var rawFromServer = cfg.ageBuckets || [];
+    if (rawFromServer.length >= 2) { saveToLocal(rawFromServer); window.AGE_BUCKETS = hydrateBuckets(rawFromServer); renderAgeLegend(); if (dashboardData) loadDashboard(); }
+  }).catch(() => { var d = getDefaultBuckets(); saveToLocal(d); window.AGE_BUCKETS = hydrateBuckets(d); renderAgeLegend(); if (dashboardData) loadDashboard(); });
+  var d = getDefaultBuckets(); saveToLocal(d); window.AGE_BUCKETS = hydrateBuckets(d);
+}
+function saveToLocal(raw) { try { localStorage.setItem(AGE_STORAGE_KEY, JSON.stringify(raw)); } catch (e) {} }
+function dehydrateBuckets() { return (window.AGE_BUCKETS || []).map(function(b) { return { maxDays: b.maxDays, label: b.label, chartColor: b.chartColor }; }); }
+function renderAgeLegend() {
+  var container = document.getElementById('ageLegendItems'); if (!container) return; container.innerHTML = '';
+  (window.AGE_BUCKETS || []).forEach(function(b) { var item = document.createElement('div'); item.className = 'legend-item'; item.innerHTML = '<div class="legend-dot" style="background:' + esc(b.bg) + '"></div>有货·' + esc(b.label); container.appendChild(item); });
+}
+function openAgeSettings() { renderSettingsForm(); document.getElementById('ageSettingsOverlay').classList.add('show'); }
+function closeAgeSettings(e) { if (e && e.target !== document.getElementById('ageSettingsOverlay')) return; document.getElementById('ageSettingsOverlay').classList.remove('show'); }
+function renderSettingsForm() {
+  var container = document.getElementById('ageBucketRows'), raw = dehydrateBuckets(), html = '';
+  raw.forEach(function(b, idx) { var isLast = idx === raw.length - 1, label = autoLabel(raw, idx), canDelete = raw.length > 2;
+    html += '<div class="bucket-row" data-idx="' + idx + '"><div class="b-index">' + (idx + 1) + '</div><div class="b-field"><label>天数阈值</label><input type="number" value="' + (b.maxDays != null ? b.maxDays : '') + '" min="1" ' + (isLast ? 'disabled placeholder="∞"' : '') + ' onchange="onBucketChange()" data-field="maxDays"></div><div class="b-label-preview">' + esc(label) + '</div><div class="b-field"><label>颜色</label><input type="color" value="' + esc(b.chartColor) + '" onchange="onBucketChange()" data-field="color"></div>' + (canDelete ? '<button class="b-delete" onclick="removeBucket(' + idx + ')" title="删除此分段">×</button>' : '') + '</div>';
+  }); container.innerHTML = html;
+}
+function onBucketChange() {
+  var rows = document.querySelectorAll('#ageBucketRows .bucket-row'), raw = [];
+  rows.forEach(function(row) { var mi = row.querySelector('[data-field="maxDays"]'), ci = row.querySelector('[data-field="color"]'), val = mi ? parseInt(mi.value) : null; raw.push({ maxDays: (isNaN(val) || val <= 0) ? null : val, label: '', chartColor: ci ? ci.value : '#10b981' }); });
+  rows.forEach(function(row, idx) { var preview = row.querySelector('.b-label-preview'); if (preview) preview.textContent = autoLabel(raw, idx); });
+}
+function addBucket() {
+  var raw = dehydrateBuckets(), last = raw.pop(), prevMax = raw.length > 0 ? raw[raw.length - 1].maxDays : 0, newMax = prevMax + 30;
+  var usedColors = raw.map(function(b) { return b.chartColor; }), newColor = AGE_COLOR_PALETTE[0];
+  for (var i = 0; i < AGE_COLOR_PALETTE.length; i++) { if (usedColors.indexOf(AGE_COLOR_PALETTE[i]) === -1) { newColor = AGE_COLOR_PALETTE[i]; break; } }
+  raw.push({ maxDays: newMax, label: '', chartColor: newColor }); raw.push(last); saveToLocal(raw); window.AGE_BUCKETS = hydrateBuckets(raw); renderSettingsForm();
+}
+function removeBucket(idx) { var raw = dehydrateBuckets(); if (raw.length <= 2) return; raw.splice(idx, 1); saveToLocal(raw); window.AGE_BUCKETS = hydrateBuckets(raw); renderSettingsForm(); }
+function saveAgeSettings() {
+  var raw = [], rows = document.querySelectorAll('#ageBucketRows .bucket-row');
+  rows.forEach(function(row) { var mi = row.querySelector('[data-field="maxDays"]'), ci = row.querySelector('[data-field="color"]'), val = (mi && !mi.disabled) ? parseInt(mi.value) : null, color = ci ? ci.value : '#10b981'; raw.push({ maxDays: (isNaN(val) || val <= 0) ? null : val, label: '', chartColor: color }); });
+  for (var i = 0; i < raw.length - 2; i++) { if (raw[i].maxDays !== null && raw[i+1].maxDays !== null && raw[i].maxDays >= raw[i+1].maxDays) { alert('天数阈值必须从小到大递增！'); return; } }
+  raw.forEach(function(b, idx) { b.label = autoLabel(raw, idx); }); saveToLocal(raw); window.AGE_BUCKETS = hydrateBuckets(raw); renderAgeLegend(); closeAgeSettings(); loadDashboard(); if (Object.keys(allDataByLayer).length > 0) renderAllGrids();
+}
+function resetAgeBuckets() { var d = getDefaultBuckets(); saveToLocal(d); window.AGE_BUCKETS = hydrateBuckets(d); renderSettingsForm(); }
+
+async function refreshAll() { const btn = document.querySelector('.refresh-btn'); if (!btn || btn.classList.contains('refreshing')) return; btn.classList.add('refreshing'); try { await Promise.all([loadDashboard(), loadAllLayers()]); } finally { btn.classList.remove('refreshing'); } }
+
+async function init() {
+  loadAgeBuckets(); renderAgeLegend(); bindControls(); bindSearch(); refreshData(); setInterval(refreshData, 1000);
+  try { const cfg = await fetch(`/api/config?zone=${ZONE}`).then(r => r.json()); if (cfg.totalLayers > 0) TOTAL_LAYERS = cfg.totalLayers; if (cfg.totalRows > 0) TOTAL_ROWS = cfg.totalRows; } catch (e) { console.warn('获取配置失败', e); }
+  await refreshAll(); setInterval(refreshAll, AUTO_REFRESH_MS);
+}
+
+init();
+</script>
+</body>
+</html>
