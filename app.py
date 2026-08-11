@@ -5,6 +5,9 @@ WMS 立体库看板 - 多库区后端
 """
 import os
 import sys
+import sqlite3
+import threading
+import time
 from datetime import datetime, timedelta
 
 import pyodbc
@@ -22,6 +25,106 @@ app = Flask(__name__,
             static_folder=os.path.join(base_dir, 'static'),
             static_url_path='/static')
 CORS(app)
+
+# =====================================================
+# 利用率历史记录 (SQLite)
+# =====================================================
+HISTORY_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'history.db')
+SNAPSHOT_INTERVAL_SEC = 3600  # 每小时采集一次
+
+
+def _init_history_db():
+    """初始化 SQLite 历史记录表"""
+    conn = sqlite3.connect(HISTORY_DB)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS utilization_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            recorded_at TEXT NOT NULL,
+            f_occupied INTEGER NOT NULL,
+            f_total INTEGER NOT NULL,
+            f_pct REAL NOT NULL,
+            h_occupied INTEGER NOT NULL,
+            h_total INTEGER NOT NULL,
+            h_pct REAL NOT NULL,
+            combined_pct REAL NOT NULL,
+            UNIQUE(recorded_at)
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+
+def _record_utilization():
+    """采集当前利用率快照并写入 SQLite"""
+    if config.MOCK_MODE:
+        return  # 模拟模式不采集
+    try:
+        now = datetime.now().replace(minute=0, second=0, microsecond=0).strftime('%Y-%m-%d %H:%M')
+        snapshots = {}
+        for zone in ['f', 'h']:
+            z = config.ZONES[zone]
+            conn = get_db(zone)
+            try:
+                sql = """
+                    SELECT
+                        COUNT(*)                                                      AS total,
+                        SUM(CASE WHEN KW_STATE = 4 THEN 1 ELSE 0 END)                 AS occupied
+                    FROM WMS_HJ_KW
+                """
+                row = query_db(sql, conn=conn, one=True)
+                total = _to_int(row['total']) if row else 0
+                occupied = _to_int(row['occupied']) if row else 0
+                pct = round(occupied / total * 100, 1) if total else 0
+                snapshots[zone] = {'occupied': occupied, 'total': total, 'pct': pct}
+            finally:
+                conn.close()
+
+        combined_pct = round(
+            (snapshots['f']['occupied'] + snapshots['h']['occupied'])
+            / (snapshots['f']['total'] + snapshots['h']['total']) * 100, 1
+        ) if (snapshots['f']['total'] + snapshots['h']['total']) else 0
+
+        db = sqlite3.connect(HISTORY_DB)
+        db.execute(
+            'INSERT OR REPLACE INTO utilization_history '
+            '(recorded_at, f_occupied, f_total, f_pct, h_occupied, h_total, h_pct, combined_pct) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            (now, snapshots['f']['occupied'], snapshots['f']['total'], snapshots['f']['pct'],
+             snapshots['h']['occupied'], snapshots['h']['total'], snapshots['h']['pct'], combined_pct)
+        )
+        db.commit()
+        db.close()
+        print(f"[采集] {now} 利用率已记录 - F区:{snapshots['f']['pct']}% H区:{snapshots['h']['pct']}% 合计:{combined_pct}%")
+    except Exception as e:
+        print(f"[采集] 失败: {e}")
+
+
+def _snapshot_loop():
+    """后台线程：定时采集 + 清理过期数据"""
+    while True:
+        time.sleep(SNAPSHOT_INTERVAL_SEC)
+        try:
+            _record_utilization()
+            # 清理 90 天前的旧数据
+            cutoff = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d %H:%M')
+            db = sqlite3.connect(HISTORY_DB)
+            db.execute('DELETE FROM utilization_history WHERE recorded_at < ?', (cutoff,))
+            db.commit()
+            db.close()
+        except Exception as e:
+            print(f"[后台线程] 异常: {e}")
+
+
+def _start_history_thread():
+    """启动后台采集线程"""
+    _init_history_db()
+    if not config.MOCK_MODE:
+        # 启动后立即采集一次
+        time.sleep(10)  # 等 Flask 完全启动
+        _record_utilization()
+    t = threading.Thread(target=_snapshot_loop, daemon=True, name='util-snapshot')
+    t.start()
+    print("[历史记录] 后台采集线程已启动 (间隔: {}分钟)".format(SNAPSHOT_INTERVAL_SEC // 60))
 
 # =====================================================
 # 工具函数
@@ -826,6 +929,62 @@ def api_search():
 
 
 # =====================================================
+# API: 利用率历史趋势
+# =====================================================
+@app.route('/api/utilization-history')
+def api_utilization_history():
+    days = request.args.get('days', '30')
+    try:
+        days = int(days)
+    except ValueError:
+        days = 30
+    days = max(1, min(days, 90))  # 限制 1-90 天
+
+    if config.MOCK_MODE:
+        # 模拟模式：生成假历史数据（每天一条，带轻微上升趋势）
+        import random
+        random.seed(42)
+        result = []
+        base = 55
+        for i in range(days):
+            d = datetime.now().date() - timedelta(days=days - 1 - i)
+            base += random.uniform(-0.5, 1.0)  # 每日波动，整体缓慢上升
+            result.append({
+                'date': d.strftime('%m/%d'),
+                'f_pct': round(base + random.uniform(-2, 2), 1),
+                'h_pct': round(base + random.uniform(-4, 3), 1),
+                'combined_pct': round(base + random.uniform(-3, 2), 1),
+            })
+        return jsonify({'data': result, 'mode': 'mock'})
+
+    cutoff = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+    try:
+        db = sqlite3.connect(HISTORY_DB)
+        # 按天聚合：取当天所有小时数据的平均值
+        rows = db.execute(
+            'SELECT substr(recorded_at, 1, 10) AS date, '
+            'ROUND(AVG(f_pct), 1), ROUND(AVG(h_pct), 1), ROUND(AVG(combined_pct), 1) '
+            'FROM utilization_history '
+            'WHERE recorded_at >= ? '
+            'GROUP BY date ORDER BY date ASC',
+            (cutoff,)
+        ).fetchall()
+        db.close()
+        result = [
+            {
+                'date': r[0][5:] if len(r[0]) >= 5 else r[0],  # MM-DD 格式
+                'f_pct': round(r[1], 1),
+                'h_pct': round(r[2], 1),
+                'combined_pct': round(r[3], 1),
+            }
+            for r in rows
+        ]
+        return jsonify({'data': result, 'mode': 'real'})
+    except Exception as e:
+        return jsonify({'data': [], 'mode': 'real', 'error': str(e)})
+
+
+# =====================================================
 # 启动
 # =====================================================
 def main():
@@ -839,8 +998,26 @@ def main():
     if not config.MOCK_MODE:
         print(f"  - F区:    {config.ZONES['f']['db_server']}")
         print(f"  - H区:    {config.ZONES['h']['db_server']}")
+    _start_history_thread()
     app.run(host='0.0.0.0', port=port, debug=debug)
+
+
+# =====================================================
+# 自动启动后台采集线程（支持 python app.py 和 gunicorn）
+# =====================================================
+_history_started = False
+
+
+def _auto_start_history():
+    global _history_started
+    if _history_started:
+        return
+    _history_started = True
+    _start_history_thread()
 
 
 if __name__ == '__main__':
     main()
+else:
+    # gunicorn 加载时会执行此处，多个 worker 之间用 UNIQUE(recorded_at) 防重复
+    _auto_start_history()
