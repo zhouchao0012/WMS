@@ -195,20 +195,20 @@ def _build_mock_data(zone):
         return str(uuid.uuid4()).replace('-', '')[:10].upper()
 
     products = [
-        ('PS-ZN501', 'GG-200X150', 'XH-A100', '智能控制模块', 'TMGZ20250315001', '深圳电子科技'),
-        ('SC-MC330', 'GG-300X200', 'XH-B200', '伺服电机', 'TMGZ20250315002', '上海机电股份'),
-        ('QG-ZD210', 'GG-180X120', 'XH-C150', '气缸总成', 'TMGZ20250315003', '广州气动元件'),
-        ('JQ-JS408', 'GG-250X250', 'XH-D300', '减速器箱体', 'TMGZ20250315004', '天津传动设备'),
-        ('CL-BB902', 'GG-150X100', 'XH-E120', '齿轮泵', 'TMGZ20250315005', '武汉液压件'),
-        ('TG-CC705', 'GG-400X300', 'XH-F400', '推杆执行器', 'TMGZ20250315006', '南京自动化'),
-        ('XT-ZH106', 'GG-220X180', 'XH-G180', '旋转接头', 'TMGZ20250315007', '成都精密机械'),
-        ('BC-LL307', 'GG-350X280', 'XH-H350', '联轴器壳体', 'TMGZ20250315008', '西安重工设备'),
-        ('DJ-WW504', 'GG-160X140', 'XH-I160', '微型电机', 'TMGZ20250315009', '东莞微型电机'),
-        ('ZK-QQ809', 'GG-280X260', 'XH-J280', '真空吸盘座', 'TMGZ20250315010', '苏州真空科技'),
-        ('FD-FF601', 'GG-320X240', 'XH-K320', '阀体组件', 'TMGZ20250315011', '浙江阀门制造'),
-        ('YJ-GG202', 'GG-190X170', 'XH-L190', '液压缸筒', 'TMGZ20250315012', '沈阳液压设备'),
-        ('CZ-AA110', 'GG-210X190', 'XH-M210', '传感底座', 'TMGZ20250315013', '厦门传感器厂'),
-        ('DJ-BB808', 'GG-270X230', 'XH-N270', '步进驱动', 'TMGZ20250315014', '青岛驱动器厂'),
+        ('PS-ZN501', 'GG-200X150', 'XH-A100', 'TMGZ20250315001', '深圳电子科技'),
+        ('SC-MC330', 'GG-300X200', 'XH-B200', 'TMGZ20250315002', '上海机电股份'),
+        ('QG-ZD210', 'GG-180X120', 'XH-C150', 'TMGZ20250315003', '广州气动元件'),
+        ('JQ-JS408', 'GG-250X250', 'XH-D300', 'TMGZ20250315004', '天津传动设备'),
+        ('CL-BB902', 'GG-150X100', 'XH-E120', 'TMGZ20250315005', '武汉液压件'),
+        ('TG-CC705', 'GG-400X300', 'XH-F400', 'TMGZ20250315006', '南京自动化'),
+        ('XT-ZH106', 'GG-220X180', 'XH-G180', 'TMGZ20250315007', '成都精密机械'),
+        ('BC-LL307', 'GG-350X280', 'XH-H350', 'TMGZ20250315008', '西安重工设备'),
+        ('DJ-WW504', 'GG-160X140', 'XH-I160', 'TMGZ20250315009', '东莞微型电机'),
+        ('ZK-QQ809', 'GG-280X260', 'XH-J280', 'TMGZ20250315010', '苏州真空科技'),
+        ('FD-FF601', 'GG-320X240', 'XH-K320', 'TMGZ20250315011', '浙江阀门制造'),
+        ('YJ-GG202', 'GG-190X170', 'XH-L190', 'TMGZ20250315012', '沈阳液压设备'),
+        ('CZ-AA110', 'GG-210X190', 'XH-M210', 'TMGZ20250315013', '厦门传感器厂'),
+        ('DJ-BB808', 'GG-270X230', 'XH-N270', 'TMGZ20250315014', '青岛驱动器厂'),
     ]
 
     def rand_date(days_back=365):
@@ -263,12 +263,11 @@ def _build_mock_data(zone):
                 inbound = rand_older(61, 365)
             loc['product'] = {
                 'palletNumber': f"TP{random.randint(100000, 999999)}",
-                'barcode': p[4],
+                'barcode': p[3],
                 'materielCode': p[0],
                 'spec': p[1],
                 'model': p[2],
-                'codeName': p[3],
-                'supplier': p[5],
+                'supplier': p[4],
                 'inboundTime': inbound,
             }
 
@@ -359,7 +358,6 @@ def api_locations():
             r.MATERIEL_CODE,
             r.GG                             AS spec,
             r.XH                             AS model,
-            r.DM                             AS code_name,
             r.SJ                             AS supplier,
             r.RKSJ                           AS inbound_time
         FROM WMS_HJ_KW k
@@ -405,7 +403,6 @@ def _build_loc_from_row(r, zone):
             'materielCode': r.get('MATERIEL_CODE') or '',
             'spec': r.get('spec') or '',
             'model': r.get('model') or '',
-            'codeName': r.get('code_name') or '',
             'supplier': r.get('supplier') or '',
             'inboundTime': inbound_time.strftime('%Y-%m-%d %H:%M:%S')
                 if inbound_time and hasattr(inbound_time, 'strftime')
@@ -435,7 +432,6 @@ def api_locations_all():
             r.MATERIEL_CODE,
             r.GG                             AS spec,
             r.XH                             AS model,
-            r.DM                             AS code_name,
             r.SJ                             AS supplier,
             r.RKSJ                           AS inbound_time
         FROM WMS_HJ_KW k
@@ -795,7 +791,6 @@ def api_location_detail(code):
             r.MATERIEL_CODE,
             r.GG AS spec,
             r.XH AS model,
-            r.DM AS code_name,
             r.TM AS barcode,
             r.SJ AS supplier,
             r.REAL_HEIGHT,
@@ -835,7 +830,6 @@ def api_location_detail(code):
             'materielCode': r.get('MATERIEL_CODE') or '',
             'spec': r.get('spec') or '',
             'model': r.get('model') or '',
-            'codeName': r.get('code_name') or '',
             'barcode': r.get('barcode') or '',
             'supplier': r.get('supplier') or '',
             'realHeight': r.get('REAL_HEIGHT', 0),
@@ -960,10 +954,10 @@ def api_utilization_history():
     cutoff = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
     try:
         db = sqlite3.connect(HISTORY_DB)
-        # 按天聚合：取当天所有小时数据的平均值
+        # 按天聚合：取当天峰值利用率（MAX = 当日最大库存 ÷ 库容）
         rows = db.execute(
             'SELECT substr(recorded_at, 1, 10) AS date, '
-            'ROUND(AVG(f_pct), 1), ROUND(AVG(h_pct), 1), ROUND(AVG(combined_pct), 1) '
+            'ROUND(MAX(f_pct), 1), ROUND(MAX(h_pct), 1), ROUND(MAX(combined_pct), 1) '
             'FROM utilization_history '
             'WHERE recorded_at >= ? '
             'GROUP BY date ORDER BY date ASC',
