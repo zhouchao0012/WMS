@@ -281,6 +281,15 @@
     </div>
   </div>
 
+  <!-- ====== CHARTS ROW 4: Roll Count Trend ====== -->
+  <div class="chart-row">
+    <div class="panel">
+      <div class="panel-title">&#9679; 卷数历史趋势</div>
+      <div class="panel-subtitle">F区 · H区 · 合计 在库卷数走势</div>
+      <div class="chart-body" id="chartRollTrend" style="height:280px;"></div>
+    </div>
+  </div>
+
   <!-- ====== CHARTS ROW 3: F Status Pie + H Status Pie + Total In/Out ====== -->
   <div class="chart-section-title">分区状态详情</div>
   <div class="chart-row cols-2">
@@ -408,6 +417,7 @@ function renderAllCharts() {
   renderCompare();
   renderTrendCombined();
   renderUtilTrend();
+  renderRollTrend();
   renderStatusZF();
   renderStatusZH();
 }
@@ -585,6 +595,63 @@ async function renderUtilTrend() {
         data: utilHistoryData.map(d => d.h_pct),
         lineStyle: { color: '#f59e0b', width: 2, type: 'dashed' },
         itemStyle: { color: '#f59e0b' }
+      }
+    ]
+  });
+}
+
+// 4b. Roll Count Trend
+let rollTrendData = [];
+async function renderRollTrend() {
+  try {
+    const r = await fetch('/api/roll-trend?days=30');
+    const j = await r.json();
+    rollTrendData = j.data || [];
+  } catch(e) { rollTrendData = []; }
+
+  const dates = rollTrendData.map(d => d.date);
+
+  ch('chartRollTrend').setOption({
+    tooltip: { trigger: 'axis', ...TOOLTIP,
+      formatter: function(ps) {
+        let s = '<strong>' + ps[0].axisValue + '</strong>';
+        ps.forEach(p => { s += '<br/>' + p.marker + ' ' + p.seriesName + ': <b>' + p.value.toLocaleString() + ' 卷</b>'; });
+        return s;
+      }
+    },
+    legend: { data: ['合计', 'F区', 'H区'], bottom: 0, textStyle: { fontSize: 11, color: '#334155', fontWeight: 500 }, itemWidth: 14, itemHeight: 2 },
+    grid: { left: 54, right: 20, top: 16, bottom: 36 },
+    xAxis: {
+      type: 'category', data: dates,
+      axisLabel: { fontSize: 10, color: '#334155', interval: Math.max(1, Math.floor(dates.length / 6)) },
+      axisTick: { show: false }
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { fontSize: 11, color: '#334155', formatter: '{value}' },
+      splitLine: { lineStyle: { type: 'dashed', color: '#f1f5f9' } }
+    },
+    series: [
+      {
+        name: '合计', type: 'line', smooth: true, symbol: 'circle', symbolSize: 4,
+        data: rollTrendData.map(d => d.combined_rolls),
+        lineStyle: { color: '#8b5cf6', width: 3 },
+        itemStyle: { color: '#8b5cf6' },
+        areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: 'rgba(139,92,246,0.15)' }, { offset: 1, color: 'rgba(139,92,246,0.0)' }
+        ])}
+      },
+      {
+        name: 'F区', type: 'line', smooth: true, symbol: 'circle', symbolSize: 3,
+        data: rollTrendData.map(d => d.f_rolls),
+        lineStyle: { color: '#3b82f6', width: 2, type: 'dashed' },
+        itemStyle: { color: '#3b82f6' }
+      },
+      {
+        name: 'H区', type: 'line', smooth: true, symbol: 'circle', symbolSize: 3,
+        data: rollTrendData.map(d => d.h_rolls),
+        lineStyle: { color: '#10b981', width: 2, type: 'dashed' },
+        itemStyle: { color: '#10b981' }
       }
     ]
   });

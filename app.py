@@ -47,9 +47,25 @@ def _init_history_db():
             h_total INTEGER NOT NULL,
             h_pct REAL NOT NULL,
             combined_pct REAL NOT NULL,
+            f_rolls INTEGER NOT NULL DEFAULT 0,
+            h_rolls INTEGER NOT NULL DEFAULT 0,
+            combined_rolls INTEGER NOT NULL DEFAULT 0,
             UNIQUE(recorded_at)
         )
     ''')
+    # 兼容旧表：如果缺少卷数列则自动添加
+    try:
+        conn.execute('ALTER TABLE utilization_history ADD COLUMN f_rolls INTEGER NOT NULL DEFAULT 0')
+    except:
+        pass
+    try:
+        conn.execute('ALTER TABLE utilization_history ADD COLUMN h_rolls INTEGER NOT NULL DEFAULT 0')
+    except:
+        pass
+    try:
+        conn.execute('ALTER TABLE utilization_history ADD COLUMN combined_rolls INTEGER NOT NULL DEFAULT 0')
+    except:
+        pass
     conn.commit()
     conn.close()
 
@@ -61,6 +77,7 @@ def _record_utilization():
     try:
         now = datetime.now().replace(minute=0, second=0, microsecond=0).strftime('%Y-%m-%d %H:%M')
         snapshots = {}
+        roll_counts = {}
         for zone in ['f', 'h']:
             z = config.ZONES[zone]
             conn = get_db(zone)
@@ -76,6 +93,21 @@ def _record_utilization():
                 occupied = _to_int(row['occupied']) if row else 0
                 pct = round(occupied / total * 100, 1) if total else 0
                 snapshots[zone] = {'occupied': occupied, 'total': total, 'pct': pct}
+
+                # 查询卷数：JOIN WMS_RKZY 取所有有货库位的 TM 字段
+                roll_sql = """
+                    SELECT r.TM
+                    FROM WMS_HJ_KW k
+                    INNER JOIN WMS_RKZY r ON k.CURRENT_RKZY_ID = r.RKZY_ID
+                    WHERE k.KW_STATE = 4
+                """
+                roll_rows = query_db(roll_sql, conn=conn)
+                total_rolls = 0
+                for rr in roll_rows:
+                    tm = (rr.get('TM') or '').strip()
+                    if tm:
+                        total_rolls += len([x for x in tm.split(',') if x.strip()]) * 2
+                roll_counts[zone] = total_rolls
             finally:
                 conn.close()
 
@@ -83,18 +115,20 @@ def _record_utilization():
             (snapshots['f']['occupied'] + snapshots['h']['occupied'])
             / (snapshots['f']['total'] + snapshots['h']['total']) * 100, 1
         ) if (snapshots['f']['total'] + snapshots['h']['total']) else 0
+        combined_rolls = roll_counts['f'] + roll_counts['h']
 
         db = sqlite3.connect(HISTORY_DB)
         db.execute(
             'INSERT OR REPLACE INTO utilization_history '
-            '(recorded_at, f_occupied, f_total, f_pct, h_occupied, h_total, h_pct, combined_pct) '
-            'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            '(recorded_at, f_occupied, f_total, f_pct, h_occupied, h_total, h_pct, combined_pct, f_rolls, h_rolls, combined_rolls) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             (now, snapshots['f']['occupied'], snapshots['f']['total'], snapshots['f']['pct'],
-             snapshots['h']['occupied'], snapshots['h']['total'], snapshots['h']['pct'], combined_pct)
+             snapshots['h']['occupied'], snapshots['h']['total'], snapshots['h']['pct'], combined_pct,
+             roll_counts['f'], roll_counts['h'], combined_rolls)
         )
         db.commit()
         db.close()
-        print(f"[采集] {now} 利用率已记录 - F区:{snapshots['f']['pct']}% H区:{snapshots['h']['pct']}% 合计:{combined_pct}%")
+        print(f"[采集] {now} 利用率已记录 - F区:{snapshots['f']['pct']}% {roll_counts['f']}卷 H区:{snapshots['h']['pct']}% {roll_counts['h']}卷 合计:{combined_pct}% {combined_rolls}卷")
     except Exception as e:
         print(f"[采集] 失败: {e}")
 
@@ -991,6 +1025,94 @@ def api_utilization_history():
         return jsonify({'data': result, 'mode': 'real'})
     except Exception as e:
         return jsonify({'data': [], 'mode': 'real', 'error': str(e)})
+
+
+# =====================================================
+# API: 卷数历史趋势
+# =====================================================
+@app.route('/api/roll-trend')
+def api_roll_trend():
+    days = request.args.get('days', '30')
+    try:
+        days = int(days)
+    except ValueError:
+        days = 30
+    days = max(1, min(days, 90))
+
+    if config.MOCK_MODE:
+        import random
+        random.seed(123)
+        result = []
+        base = 1800
+        for i in range(days):
+            d = datetime.now().date() - timedelta(days=days - 1 - i)
+            base += random.randint(-20, 40)
+            result.append({
+                'date': d.strftime('%m/%d'),
+                'f_rolls': max(0, base + random.randint(-30, 30)),
+                'h_rolls': max(0, int(base * 0.7 + random.randint(-20, 20))),
+                'combined_rolls': max(0, base + int(base * 0.7 + random.randint(-40, 40))),
+            })
+        return jsonify({'data': result, 'mode': 'mock'})
+
+    # 1. 实时查询当前卷数
+    realtime = {}
+    for zone in ['f', 'h']:
+        conn = get_db(zone)
+        try:
+            roll_sql = """
+                SELECT r.TM
+                FROM WMS_HJ_KW k
+                INNER JOIN WMS_RKZY r ON k.CURRENT_RKZY_ID = r.RKZY_ID
+                WHERE k.KW_STATE = 4
+            """
+            roll_rows = query_db(roll_sql, conn=conn)
+            total = 0
+            for rr in roll_rows:
+                tm = (rr.get('TM') or '').strip()
+                if tm:
+                    total += len([x for x in tm.split(',') if x.strip()]) * 2
+            realtime[zone] = total
+        finally:
+            conn.close()
+    realtime_combined = realtime['f'] + realtime['h']
+
+    # 2. 从 history.db 取历史数据
+    cutoff = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    try:
+        db = sqlite3.connect(HISTORY_DB)
+        rows = db.execute(
+            'SELECT substr(recorded_at, 1, 10) AS date, '
+            'MAX(f_rolls), MAX(h_rolls), MAX(combined_rolls) '
+            'FROM utilization_history '
+            'WHERE recorded_at >= ? AND recorded_at < ? '
+            'GROUP BY date ORDER BY date ASC',
+            (cutoff, today_str)
+        ).fetchall()
+        db.close()
+        result = [
+            {
+                'date': r[0][5:] if len(r[0]) >= 5 else r[0],
+                'f_rolls': r[1],
+                'h_rolls': r[2],
+                'combined_rolls': r[3],
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        result = []
+
+    # 3. 追加今天的实时数据点
+    today_label = datetime.now().strftime('%m/%d')
+    result.append({
+        'date': today_label,
+        'f_rolls': realtime['f'],
+        'h_rolls': realtime['h'],
+        'combined_rolls': realtime_combined,
+    })
+
+    return jsonify({'data': result, 'mode': 'real'})
 
 
 # =====================================================
